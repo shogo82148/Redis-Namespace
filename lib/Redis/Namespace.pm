@@ -67,13 +67,13 @@ our %AFTER_FILTERS = (
     # namespace:key1 namespace:key2 => key1 key2
     all => sub {
         my ($self, @args) = @_;
-        return @args;
+        return $self->rem_namespace(@args);
     },
 
     # namespace:key1 value => key1 value
     first => sub {
-        my ($self, @args) = @_;
-        return @args;
+        my ($self, $first, @args) = @_;
+        return ($self->rem_namespace($first), @args);
     }
 );
 
@@ -93,6 +93,31 @@ sub add_namespace {
             my %hash;
             while (my ($key, $value) = each %$item) {
                 $hash{$self->add_namespace($key)} = $value;
+            }
+            push @result, \%hash;
+        } else {
+            push @result, $item;
+        }
+    }
+    return @result;
+}
+
+sub rem_namespace {
+    my ($self, @args) = @_;
+    my $namespace = $self->{namespace};
+    my @result;
+    for my $item(@args) {
+        my $type = ref $item;
+        if(!$type) {
+            push @result, $item =~ s/^$namespace://r;
+        } elsif($type eq 'SCALAR') {
+            push @result, \($$item =~ s/^$namespace://r);
+        } elsif($type eq 'ARRAY') {
+            push @result, [$self->rem_namespace(@$item)];
+        } elsif($type eq 'HASH') {
+            my %hash;
+            while (my ($key, $value) = each %$item) {
+                $hash{$self->rem_namespace($key)} = $value;
             }
             push @result, \%hash;
         } else {

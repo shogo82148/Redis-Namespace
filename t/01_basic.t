@@ -19,6 +19,13 @@ subtest 'get and set' => sub {
     $redis->flushall;
 };
 
+subtest 'mget and mset' => sub {
+    ok($ns->mset(foo => 'bar', hoge => 'fuga'), 'mset foo => bar, hoge => fuga');
+    is_deeply([$ns->mget('foo', 'hoge')], ['bar', 'fuga'], 'mget foo hoge = hoge, fuga');
+    is_deeply([$redis->mget('ns:foo', 'ns:hoge')], ['bar', 'fuga'], 'foo, hoge in namespace');
+    $redis->flushall;
+};
+
 subtest 'keys' => sub {
     my @keys;
     for (1..10) {

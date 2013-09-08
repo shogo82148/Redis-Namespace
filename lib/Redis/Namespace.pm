@@ -14,8 +14,13 @@ our %BEFORE_FILTERS = (
 
     # GET key => GET namespace:key
     first => sub {
-        my ($self, $first, @args) = @_;
-        return ($self->add_namespace($first), @args);
+        my ($self, @args) = @_;
+        if(@args) {
+            my $first = shift @args;
+            return ($self->add_namespace($first), @args);
+        } else {
+            return @args;
+        }
     },
 
     # MGET key1 key2 => MGET namespace:key1 namespace:key2
@@ -25,21 +30,30 @@ our %BEFORE_FILTERS = (
     },
 
     exclude_first => sub {
-        my ($self, $first, @args) = @_;
-        return (
-            $first,
-            $self->add_namespace(@args),
-        );
+        my ($self, @args) = @_;
+        if(@args) {
+            my $first = shift @args;
+            return (
+                $first,
+                $self->add_namespace(@args),
+            );
+        } else {
+            return @args;
+        }
     },
 
     # BLPOP key1 key2 timeout => BLPOP namespace:key1 namespace:key2 timeout
     exclude_last => sub {
         my ($self, @args) = @_;
-        my $last = pop @args;
-        return (
-            $self->add_namespace(@args),
-            $last
-        );
+        if(@args) {
+            my $last = pop @args;
+            return (
+                $self->add_namespace(@args),
+                $last
+            );
+        } else {
+            return @args;
+        }
     },
 
     # MSET key1 value1 key2 value2 => MSET namespace:key1 value1 namespace:key2 value2
@@ -108,7 +122,7 @@ sub rem_namespace {
     my @result;
     for my $item(@args) {
         my $type = ref $item;
-        if(!$type) {
+        if($item && !$type) {
             push @result, $item =~ s/^$namespace://r;
         } elsif($type eq 'SCALAR') {
             push @result, \($$item =~ s/^$namespace://r);
@@ -262,6 +276,10 @@ our %COMMANDS = (
     zrevrank         => [ 'first' ],
     zscore           => [ 'first' ],
     zunionstore      => [ 'exclude_options' ],
+
+    wait_all_responses => [],
+    wait_one_response  => [],
+    multi              => [],
 );
 
 sub new {
@@ -290,8 +308,19 @@ sub _wrap_method {
         my ($self, @args) = @_;
         my $redis = $self->{redis};
         my $wantarray = wantarray;
-        warn $warn_message if $self->{warning};
-        @args = $before->($self, @args);
+        warn $warn_message if $warn_message && $self->{warning};
+
+        if(@args && ref $args[-1] eq 'CODE') {
+            my $cb = pop @args;
+            @args = $before->($self, @args);
+            push @args, sub {
+                my ($result, $error) = @_;
+                $cb->($after->($self, $result), $error);
+            };
+        } else {
+            @args = $before->($self, @args);
+        }
+
         if(!$wantarray) {
             $redis->$command(@args);
         } elsif($wantarray) {

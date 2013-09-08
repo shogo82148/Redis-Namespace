@@ -3,6 +3,37 @@ use strict;
 use warnings;
 our $VERSION = '0.01';
 
+use Redis;
+
+sub new {
+    my $class = shift;
+    my %args = @_;
+    my $self  = bless {}, $class;
+
+    $self->{redis} = $args{redis} || Redis->new(%args);
+    $self->{namespace} = $args{namespace};
+    return $self;
+}
+
+sub DESTROY { }
+
+our $AUTOLOAD;
+sub AUTOLOAD {
+  my $command = $AUTOLOAD;
+  $command =~ s/.*://;
+  my $method = sub {
+      my ($self, @args) = @_;
+      my $redis = $self->{redis};
+      return $redis->$command(@args);
+  };
+
+  # Save this method for future calls
+  no strict 'refs';
+  *$AUTOLOAD = $method;
+
+  goto $method;
+}
+
 1;
 __END__
 

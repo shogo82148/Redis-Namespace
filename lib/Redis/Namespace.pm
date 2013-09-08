@@ -123,9 +123,12 @@ sub rem_namespace {
     for my $item(@args) {
         my $type = ref $item;
         if($item && !$type) {
-            push @result, $item =~ s/^$namespace://r;
+            $item =~ s/^$namespace://;
+            push @result, $item;
         } elsif($type eq 'SCALAR') {
-            push @result, \($$item =~ s/^$namespace://r);
+            my $tmp = $$item;
+            $tmp =~ s/^$namespace://;
+            push @result, \$tmp;
         } elsif($type eq 'ARRAY') {
             push @result, [$self->rem_namespace(@$item)];
         } elsif($type eq 'HASH') {

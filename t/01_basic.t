@@ -57,6 +57,22 @@ subtest 'exists and del' => sub {
     $redis->flushall;
 };
 
+subtest 'type' => sub {
+    $redis->set('ns:string', 'foo');
+    $redis->lpush('ns:list', 'hoge');
+    $redis->sadd('ns:set', 'piyo');
+    $redis->zadd('ns:zset', 0, 'piyo');
+    $redis->hset('ns:hash', 'homu', 'fuga');
+
+    cmp_ok($ns->type('string'), 'eq', 'string', 'string type');
+    cmp_ok($ns->type('list'), 'eq', 'list', 'list type');
+    cmp_ok($ns->type('set'), 'eq', 'set', 'set type');
+    cmp_ok($ns->type('zset'), 'eq', 'zset', 'zset type');
+    cmp_ok($ns->type('hash'), 'eq', 'hash', 'hash type');
+    cmp_ok($ns->type('none'), 'eq', 'none', 'none type');
+    $redis->flushall;
+};
+
 subtest 'keys' => sub {
     my @keys;
     for (1..10) {

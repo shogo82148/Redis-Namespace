@@ -26,6 +26,26 @@ subtest 'mget and mset' => sub {
     $redis->flushall;
 };
 
+subtest 'incr and decr' => sub {
+    is($ns->incr('counter'), 1, 'incr');
+    is($ns->get('counter'), 1, 'count = 1');
+    is($redis->get('ns:counter'), 1, 'count in namespace');
+
+    is($ns->incrby('counter', 3), 4, 'incrby');
+    is($ns->get('counter'), 4, 'count = 4');
+    is($redis->get('ns:counter'), 4, 'count in namespace');
+
+    is($ns->decr('counter'), 3, 'decr');
+    is($ns->get('counter'), 3, 'count = 3');
+    is($redis->get('ns:counter'), 3, 'count in namespace');
+
+    is($ns->decrby('counter', 3), 0, 'decrby');
+    is($ns->get('counter'), 0, 'count = 0');
+    is($redis->get('ns:counter'), 0, 'count in namespace');
+
+    $redis->flushall;
+};
+
 subtest 'keys' => sub {
     my @keys;
     for (1..10) {

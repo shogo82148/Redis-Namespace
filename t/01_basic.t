@@ -46,6 +46,17 @@ subtest 'incr and decr' => sub {
     $redis->flushall;
 };
 
+subtest 'exists and del' => sub {
+    ok(!$ns->exists('key'), 'not exists');
+    $redis->set('ns:key', 'foo');
+    ok($ns->exists('key'), 'exists');
+
+    ok($ns->del('key'), 'del');
+    ok(!$ns->del('key'), 'not del');
+    ok(!$redis->exists('ns:key'), 'key in namespace');
+    $redis->flushall;
+};
+
 subtest 'keys' => sub {
     my @keys;
     for (1..10) {

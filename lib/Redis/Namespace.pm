@@ -297,6 +297,7 @@ sub new {
     $self->{redis} = $args{redis} || Redis->new(%args);
     $self->{namespace} = $args{namespace};
     $self->{warning} = $args{warning};
+    $self->{subscribers} = {};
     return $self;
 }
 
@@ -354,6 +355,50 @@ sub AUTOLOAD {
   *$AUTOLOAD = $method;
 
   goto $method;
+}
+
+
+sub __wrap_subcb {
+    my ($self, $cb) = @_;
+    my $subscribers = $self->{subscribers};
+    my $callback = $subscribers->{$cb} // sub {
+        my ($message, $topic, $subscribed_topic) = @_;
+        $cb->($message, $self->rem_namespace($topic), $self->rem_namespace($subscribed_topic));
+    };
+    $subscribers->{$cb} = $callback;
+    return $callback;
+}
+
+sub __subscribe {
+    my ($self, $command, @args) = @_;
+    my $cb = pop @args;
+    confess("Missing required callback in call to $command(), ")
+        unless ref($cb) eq 'CODE';
+
+    my $redis = $self->{redis};
+    my $callback = $self->__wrap_subcb($cb);
+    @args = $BEFORE_FILTERS{all}->($self, @args);
+    return $redis->$command(@args, $callback);
+}
+
+sub subscribe {
+    my $self = shift;
+    return $self->__subscribe('subscribe', @_);
+}
+
+sub psubscribe {
+    my $self = shift;
+    return $self->__subscribe('psubscribe', @_);
+}
+
+sub unsubscribe {
+    my $self = shift;
+    return $self->__subscribe('unsubscribe', @_);
+}
+
+sub punsubscribe {
+    my $self = shift;
+    return $self->__subscribe('punsubscribe', @_);
 }
 
 1;

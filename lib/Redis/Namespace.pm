@@ -94,10 +94,12 @@ our %AFTER_FILTERS = (
 sub add_namespace {
     my ($self, @args) = @_;
     my $namespace = $self->{namespace};
+    return @args unless $namespace;
+
     my @result;
     for my $item(@args) {
         my $type = ref $item;
-        if(!$type) {
+        if($item && !$type) {
             push @result, "$namespace:$item";
         } elsif($type eq 'SCALAR') {
             push @result, \"$namespace:$$item";
@@ -119,6 +121,8 @@ sub add_namespace {
 sub rem_namespace {
     my ($self, @args) = @_;
     my $namespace = $self->{namespace};
+    return @args unless $namespace;
+
     my @result;
     for my $item(@args) {
         my $type = ref $item;

@@ -169,5 +169,70 @@ subtest 'Commands operating on sets' => sub {
     is_deeply([sort $ns->smembers('test-set4')], \@test_set3, 'smembers');
 };
 
+
+subtest 'Commands operating on zsets (sorted sets)' => sub {
+    my $zset = 'test-zset';
+
+    ok($ns->zadd($zset, 0, 'foo'));
+    ok(!$ns->zadd($zset, 1, 'foo'));    # 0 returned because foo is already in the set
+
+    cmp_ok($ns->type($zset), 'eq', 'zset', 'type is zset');
+    cmp_ok($redis->type("ns:$zset"), 'eq', 'zset', 'type is zset');
+
+    is($ns->zscore($zset, 'foo'), 1);
+
+    ok($ns->zincrby($zset, 1, 'foo'));
+    is($ns->zscore($zset, 'foo'), 2);
+
+    ok($ns->zincrby($zset, 1, 'bar'));
+    is($ns->zscore($zset, 'bar'), 1);    # bar was new, so its score got set to the increment
+
+    is($ns->zrank($zset, 'bar'), 0);
+    is($ns->zrank($zset, 'foo'), 1);
+
+    is($ns->zrevrank($zset, 'bar'), 1);
+    is($ns->zrevrank($zset, 'foo'), 0);
+
+    ok($ns->zadd($zset, 2.1, 'baz'));    # we now have bar foo baz
+
+    is_deeply([$ns->zrange($zset, 0, 1)], [qw/bar foo/]);
+    is_deeply([$ns->zrevrange($zset, 0, 1)], [qw/baz foo/]);
+
+
+    my $withscores = { $ns->zrevrange($zset, 0, 1, 'WITHSCORES') };
+
+    # this uglyness gets around floating point weirdness in the return (I.E. 2.1000000000000001);
+    my $rounded_withscores = {
+        map { $_ => 0 + sprintf("%0.5f", $withscores->{$_}) }
+            keys %$withscores
+    };
+
+    is_deeply($rounded_withscores, { baz => 2.1, foo => 2 });
+
+    is_deeply([$ns->zrangebyscore($zset, 2, 3)], [qw/foo baz/]);
+
+    is($ns->zcount($zset, 2, 3), 2);
+
+    is($ns->zcard($zset), 3);
+
+    $redis->flushall;
+
+
+    my $score = 0.1;
+    my @zkeys = (qw/foo bar baz qux quux quuux quuuux quuuuux/);
+
+    ok($ns->zadd($zset, $score++, $_)) for @zkeys;
+    is_deeply([$ns->zrangebyscore($zset, 0, 8)], \@zkeys);
+
+    is($ns->zremrangebyrank($zset, 5, 8), 3);    # remove quux and up
+    is_deeply([$ns->zrangebyscore($zset, 0, 8)], [@zkeys[0 .. 4]]);
+
+    is($ns->zremrangebyscore($zset, 0, 2), 2);    # remove foo and bar
+    is_deeply([$ns->zrangebyscore($zset, 0, 8)], [@zkeys[2 .. 4]]);
+
+    # only left with 3
+    is($ns->zcard($zset), 3);
+};
+
 done_testing;
 

@@ -112,6 +112,61 @@ subtest 'list' => sub {
     cmp_ok($ns->lpop($list), 'eq', 'r1', 'lpop');
 
     ok(!$ns->rpop($list), 'rpop');
+
+    $redis->flushall;
+};
+
+subtest 'Commands operating on sets' => sub {
+    my $set = 'test-set';
+
+    ok($ns->sadd($set, 'foo'), 'sadd');
+    ok(!$ns->sadd($set, 'foo'), 'sadd');
+    cmp_ok($ns->scard($set), '==', 1, 'scard');
+    ok($ns->sismember($set, 'foo'), 'sismember');
+
+    cmp_ok($ns->type($set), 'eq', 'set', 'type is set');
+    cmp_ok($redis->type("ns:$set"), 'eq', 'set', 'type is set');
+
+    ok($ns->srem($set, 'foo'), 'srem');
+    ok(!$ns->srem($set, 'foo'), 'srem again');
+    cmp_ok($ns->scard($set), '==', 0, 'scard');
+
+    $ns->sadd('test-set1', $_) foreach ('foo', 'bar', 'baz');
+    $ns->sadd('test-set2', $_) foreach ('foo', 'baz', 'xxx');
+
+    my $inter = [sort('foo', 'baz')];
+
+    is_deeply([sort $ns->sinter('test-set1', 'test-set2')], $inter, 'sinter');
+
+    ok($ns->sinterstore('test-set-inter', 'test-set1', 'test-set2'), 'sinterstore');
+
+    cmp_ok($ns->scard('test-set-inter'), '==', $#$inter + 1, 'cardinality of intersection');
+
+    is_deeply([$ns->sdiff('test-set1', 'test-set2')], ['bar'], 'sdiff');
+    ok($ns->sdiffstore(qw( test-set-diff test-set1 test-set2 )), 'sdiffstore');
+    is($ns->scard('test-set-diff'), 1, 'cardinality of diff');
+
+    my @union = sort qw( foo bar baz xxx );
+    is_deeply([sort $ns->sunion(qw( test-set1 test-set2 ))], \@union, 'sunion');
+    ok($ns->sunionstore(qw( test-set-union test-set1 test-set2 )), 'sunionstore');
+    is($ns->scard('test-set-union'), scalar(@union), 'cardinality of union');
+
+    my $first_rand = $ns->srandmember('test-set-union');
+    ok(defined $first_rand, 'srandmember result is defined');
+    ok(scalar grep { $_ eq $first_rand } @union, 'srandmember');
+    my $second_rand = $ns->spop('test-set-union');
+    ok(defined $first_rand, 'spop result is defined');
+    ok(scalar grep { $_ eq $second_rand } @union, 'spop');
+    is($ns->scard('test-set-union'), scalar(@union) - 1, 'new cardinality of union');
+
+    my @test_set3 = sort qw( foo bar baz );
+    $ns->sadd('test-set3', $_) foreach @test_set3;
+    is_deeply([sort $ns->smembers('test-set3')], \@test_set3, 'smembers');
+
+    $ns->smove(qw( test-set3 test-set4 ), $_) foreach @test_set3;
+    is($ns->scard('test-set3'), 0, 'repeated smove depleted source');
+    is($ns->scard('test-set4'), scalar(@test_set3), 'repeated smove populated destination');
+    is_deeply([sort $ns->smembers('test-set4')], \@test_set3, 'smembers');
 };
 
 done_testing;

@@ -85,5 +85,34 @@ subtest 'keys' => sub {
     $redis->flushall;
 };
 
+subtest 'list' => sub {
+    my $list = 'test-list';
+    ok($ns->rpush($list => "r$_"), 'rpush') foreach (1 .. 3);
+    ok($ns->lpush($list => "l$_"), 'lpush') foreach (1 .. 2);
+
+    cmp_ok($ns->type($list), 'eq', 'list', 'type');
+    cmp_ok($redis->type("ns:$list"), 'eq', 'list', 'type');
+    cmp_ok($ns->llen($list), '==', 5, 'llen');
+    cmp_ok($redis->llen("ns:$list"), '==', 5, 'llen');
+
+    is_deeply([$ns->lrange($list, 0, 1)], ['l2', 'l1'], 'lrange');
+
+    ok($ns->ltrim($list, 1, 2), 'ltrim');
+    cmp_ok($ns->llen($list), '==', 2, 'llen after ltrim');
+
+    cmp_ok($ns->lindex($list, 0), 'eq', 'l1', 'lindex');
+    cmp_ok($ns->lindex($list, 1), 'eq', 'r1', 'lindex');
+
+    ok($ns->lset($list, 0, 'foo'), 'lset');
+    cmp_ok($ns->lindex($list, 0), 'eq', 'foo', 'verified');
+
+    ok($ns->lrem($list, 1, 'foo'), 'lrem');
+    cmp_ok($ns->llen($list), '==', 1, 'llen after lrem');
+
+    cmp_ok($ns->lpop($list), 'eq', 'r1', 'lpop');
+
+    ok(!$ns->rpop($list), 'rpop');
+};
+
 done_testing;
 

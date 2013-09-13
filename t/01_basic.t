@@ -274,5 +274,24 @@ subtest 'Commands operating on hashes' => sub {
     $redis->flushall;
 };
 
+
+subtest 'Multiple databases handling commands' => sub {
+    ok($ns->select(1), 'select');
+    ok($ns->select(0), 'select');
+
+    ok($ns->set('foo', 'bar'), 'set');
+
+    ok($ns->move('foo', 1), 'move');
+    ok(!$ns->exists('foo'), 'gone');
+    ok(!$redis->exists('ns:foo'), 'gone');
+
+    ok($ns->select(1),     'select');
+    ok($ns->exists('foo'), 'exists');
+    ok($redis->exists('ns:foo'), 'exists');
+
+    ok($ns->flushdb, 'flushdb');
+    cmp_ok($ns->dbsize, '==', 0, 'empty');
+};
+
 done_testing;
 

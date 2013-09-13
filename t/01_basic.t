@@ -291,6 +291,94 @@ subtest 'Multiple databases handling commands' => sub {
 
     ok($ns->flushdb, 'flushdb');
     cmp_ok($ns->dbsize, '==', 0, 'empty');
+
+    $redis->flushall;
+};
+
+subtest 'Number Sorting' => sub {
+    $redis->lpush('ns:test-sort', $_) foreach (1 .. 4);
+
+    is_deeply([$ns->sort('test-sort')], [1, 2, 3, 4], 'sort');
+    is_deeply([$ns->sort('test-sort', 'DESC')], [4, 3, 2, 1], 'sort DESC');
+    is_deeply([$ns->sort('test-sort', 'LIMIT', 1, 2)], [2, 3], 'sort LIMIT 1 2');
+    is_deeply([$ns->sort('test-sort', 'LIMIT', 1, 2, 'DESC')], [3, 2], 'sort LIMIT 1 2 DESC');
+    ok([$ns->sort('test-sort', 'STORE', 'sort-result')], 'sort STORE');
+    is_deeply([$redis->lrange('ns:sort-result', 0, 3)], [1, 2, 3, 4], 'sort result');
+
+    $redis->flushall;
+};
+
+subtest 'Alphabet Sorting' => sub {
+    $redis->lpush('ns:test-sort', $_) foreach ('a'..'d');
+
+    is_deeply([$ns->sort('test-sort', 'ALPHA')], ['a', 'b', 'c', 'd'], 'sort ALPHA');
+    is_deeply([$ns->sort('test-sort', 'ALPHA', 'DESC')], ['d', 'c', 'b', 'a'], 'sort ALPHA DESC');
+    is_deeply([$ns->sort('test-sort', 'LIMIT', 1, 2, 'ALPHA')], ['b', 'c'], 'sort LIMIT 1 2 ALPHA');
+    is_deeply([$ns->sort('test-sort', 'limit', 1, 2, 'alpha', 'desc')], ['c', 'b'], 'sort LIMIT 1 2 ALPHA DESC');
+    ok([$ns->sort('test-sort', 'store', 'sort-result', 'alpha')], 'sort STORE ALPHA');
+    is_deeply([$redis->lrange('ns:sort-result', 0, 3)], ['a', 'b', 'c', 'd'], 'sort result');
+
+    $redis->flushall;
+};
+
+subtest 'External Key Sorting' => sub {
+    $redis->lpush('ns:test-sort', $_) foreach ('a'..'d');
+    $redis->set('ns:foo_a', 2);
+    $redis->set('ns:foo_b', 1);
+    $redis->set('ns:foo_c', 4);
+    $redis->set('ns:foo_d', 3);
+
+    is_deeply([$ns->sort('test-sort', 'BY', 'foo_*')], ['b', 'a', 'd', 'c'], 'sort BY');
+
+    $redis->flushall;
+};
+
+subtest 'External Key and Get Object Sorting' => sub {
+    $redis->lpush('ns:test-sort', $_) foreach ('a'..'d');
+    $redis->set('ns:weight_a', 2);
+    $redis->set('ns:weight_b', 1);
+    $redis->set('ns:weight_c', 4);
+    $redis->set('ns:weight_d', 3);
+    $redis->set('ns:object_a', 'A');
+    $redis->set('ns:object_b', 'B');
+    $redis->set('ns:object_c', 'C');
+    $redis->set('ns:object_d', 'D');
+
+    is_deeply([$ns->sort('test-sort', 'BY', 'weight_*', 'GET', 'object_*')], ['B', 'A', 'D', 'C'], 'sort BY GET');
+    is_deeply([$ns->sort('test-sort', 'BY', 'weight_*', 'GET', 'object_*', 'GET', '#')],
+              ['B', 'b', 'A', 'a', 'D', 'd', 'C', 'c'], 'sort BY GET GET');
+
+    $redis->flushall;
+};
+
+subtest 'External Hash and Get Hash Sorting' => sub {
+    $redis->lpush('ns:test-sort', $_) foreach ('a'..'d');
+    $redis->hset('ns:weight_a', 'foo', 2);
+    $redis->hset('ns:weight_b', 'foo', 1);
+    $redis->hset('ns:weight_c', 'foo', 4);
+    $redis->hset('ns:weight_d', 'foo', 3);
+    $redis->hset('ns:object_a', 'bar', 'A');
+    $redis->hset('ns:object_b', 'bar', 'B');
+    $redis->hset('ns:object_c', 'bar', 'C');
+    $redis->hset('ns:object_d', 'bar', 'D');
+
+    is_deeply([$ns->sort('test-sort', 'BY', 'weight_*->foo', 'GET', 'object_*->bar')],
+              ['B', 'A', 'D', 'C'], 'sort BY GET');
+    is_deeply([$ns->sort('test-sort', 'BY', 'weight_*->foo', 'GET', 'object_*->bar', 'GET', '#')],
+              ['B', 'b', 'A', 'a', 'D', 'd', 'C', 'c'], 'sort BY GET GET');
+
+    $redis->flushall;
+};
+
+subtest 'No Sorting' => sub {
+    $redis->lpush('ns:test-sort', 3);
+    $redis->lpush('ns:test-sort', 4);
+    $redis->lpush('ns:test-sort', 1);
+    $redis->lpush('ns:test-sort', 2);
+
+    is_deeply([$ns->sort('test-sort', 'BY', 'nosort')], [2, 1, 4, 3], 'nosort');
+
+    $redis->flushall;
 };
 
 done_testing;

@@ -69,6 +69,33 @@ our %BEFORE_FILTERS = (
         }
         return @result;
     },
+
+    sort => sub {
+        my ($self, @args) = @_;
+        my @res;
+        if(@args) {
+            my $first = shift @args;
+            push @res, $self->add_namespace($first);
+        }
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'limit') {
+                my $start = shift @args;
+                my $count = shift @args;
+                push @res, $option, $start, $count;
+            } elsif($option eq 'by' || $option eq 'store') {
+                my $key = shift @args;
+                push @res, $option, $self->add_namespace($key);
+            } elsif($option eq 'get') {
+                my $key = shift @args;
+                ($key) = $self->add_namespace($key) unless $key eq '#';
+                push @res, $option, $key;
+            } else {
+                push @res, $option;
+            }
+        }
+        return @res;
+    },
 );
 
 our %AFTER_FILTERS = (

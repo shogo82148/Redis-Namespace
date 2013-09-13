@@ -232,6 +232,46 @@ subtest 'Commands operating on zsets (sorted sets)' => sub {
 
     # only left with 3
     is($ns->zcard($zset), 3);
+
+    $redis->flushall;
+};
+
+subtest 'Commands operating on hashes' => sub {
+    my $hash = 'test-hash';
+
+    ok($ns->hset($hash, foo => 'bar'));
+    is($ns->hget($hash, 'foo'), 'bar');
+    is($redis->hget("ns:$hash", 'foo'), 'bar');
+    ok($ns->hexists($hash, 'foo'));
+    ok($ns->hdel($hash, 'foo'));
+    ok(!$ns->hexists($hash, 'foo'));
+
+    ok($ns->hincrby($hash, incrtest => 1));
+    is($ns->hget($hash, 'incrtest'), 1);
+
+    is($ns->hincrby($hash, incrtest => -1), 0);
+    is($ns->hget($hash, 'incrtest'), 0);
+
+    ok($ns->hdel($hash, 'incrtest'));    #cleanup
+
+    ok($ns->hsetnx($hash, setnxtest => 'baz'));
+    ok(!$ns->hsetnx($hash, setnxtest => 'baz'));    # already exists, 0 returned
+
+    ok($ns->hdel($hash, 'setnxtest'));              #cleanup
+
+    ok($ns->hmset($hash, foo => 1, bar => 2, baz => 3, qux => 4));
+
+    is_deeply([$ns->hmget($hash, qw/foo bar baz/)], [1, 2, 3]);
+
+    is($ns->hlen($hash), 4);
+
+    is_deeply([$ns->hkeys($hash)], [qw/foo bar baz qux/]);
+    is_deeply([$ns->hvals($hash)], [qw/1 2 3 4/]);
+    is_deeply({ $ns->hgetall($hash) }, { foo => 1, bar => 2, baz => 3, qux => 4 });
+
+    ok($ns->del($hash));                            # remove entire hash
+
+    $redis->flushall;
 };
 
 done_testing;

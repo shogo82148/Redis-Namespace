@@ -1,4 +1,5 @@
 use strict;
+use version 0.77;
 use Test::More;
 use Redis;
 use Test::RedisServer;
@@ -379,6 +380,32 @@ subtest 'No Sorting' => sub {
     is_deeply([$ns->sort('test-sort', 'BY', 'nosort')], [2, 1, 4, 3], 'nosort');
 
     $redis->flushall;
+};
+
+subtest 'Eval' => sub {
+    my $redis_version = version->parse($redis->info->{redis_version});
+    plan skip_all => 'your redis does not support EVAL command'
+        unless $redis_version >= '2.6.0';
+
+    $redis->set('ns:hogehoge', 'foobar');
+    is($ns->eval("return redis.call('get',KEYS[1])", 1, 'hogehoge'), 'foobar', 'eval');
+
+    ok($ns->eval("return redis.call('set',KEYS[1],ARGV[1])", 1, 'hogehoge', 'FOOBAR'), 'eval');
+    is($redis->get('ns:hogehoge'), 'FOOBAR', 'set ok');
+
+
+    my $get_script = $redis->script('LOAD', "return redis.call('get',KEYS[1])");
+    my $set_script = $redis->script('LOAD', "return redis.call('set',KEYS[1],ARGV[1])");
+
+    $redis->set('ns:hogehoge', 'foobar');
+    is($ns->evalsha($get_script, 1, 'hogehoge'), 'foobar', 'evalsha');
+
+    ok($ns->evalsha($set_script, 1, 'hogehoge', 'FOOBAR'), 'evalsha');
+    is($redis->get('ns:hogehoge'), 'FOOBAR', 'set ok');
+
+
+    $redis->flushall;
+    $redis->script('FLUSH');
 };
 
 done_testing;

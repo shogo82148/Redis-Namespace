@@ -96,6 +96,13 @@ our %BEFORE_FILTERS = (
         }
         return @res;
     },
+
+    # EVAL script 2 key1 key2 arg1 arg2 => EVAL script 2 ns:key1 ns:key2 arg1 arg2
+    eval_style => sub {
+        my ($self, $script, $number, @args) = @_;
+        my @keys = $self->add_namespace(splice @args, 0, $number);
+        return ($script, $number, @keys, @args);
+    },
 );
 
 our %AFTER_FILTERS = (

@@ -408,5 +408,21 @@ subtest 'Eval' => sub {
     $redis->script('FLUSH');
 };
 
+subtest 'ZINTERSTORE/ZUNIONSTORE' => sub {
+    $redis->zadd('ns:zset1', 1, 'one');
+    $redis->zadd('ns:zset1', 2, 'two');
+    $redis->zadd('ns:zset2', 1, 'one');
+    $redis->zadd('ns:zset2', 2, 'two');
+    $redis->zadd('ns:zset2', 3, 'three');
+
+    ok($ns->zinterstore('out', 2, 'zset1', 'zset2', 'WEIGHTS', 2, 3), 'ZINTERSTORE');
+    is_deeply([$redis->zrange('ns:out', 0, -1, 'WITHSCORES')], ['one', 5, 'two', 10], 'ZINTERSTORE result');
+
+    ok($ns->zunionstore('out', 2, 'zset1', 'zset2', 'WEIGHTS', 2, 3), 'ZUNIONSTORE');
+    is_deeply([$redis->zrange('ns:out', 0, -1, 'WITHSCORES')], ['one', 5, 'three', 9, 'two', 10], 'ZUNIONSTORE result');
+
+    $redis->flushall;
+};
+
 done_testing;
 

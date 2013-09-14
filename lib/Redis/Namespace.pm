@@ -103,6 +103,13 @@ our %BEFORE_FILTERS = (
         my @keys = $self->add_namespace(splice @args, 0, $number);
         return ($script, $number, @keys, @args);
     },
+
+    # ZINTERSTORE key0 2 key1 key2 SOME_OPTIONS => ZINTERSTORE ns:key0 2 ns:key1 ns:key2
+    exclude_options => sub {
+        my ($self, $first, $number, @args) = @_;
+        my @keys = $self->add_namespace(splice @args, 0, $number);
+        return ($self->add_namespace($first), $number, @keys, @args);
+    },
 );
 
 our %AFTER_FILTERS = (

@@ -1,4 +1,6 @@
 Revision history for Perl extension Redis::Namespace
 
-0.01    Sun Sep  8 13:32:55 2013
-        - original version
+{{$NEXT}}
+
+0.01 2013-10-14T12:43:45Z
+        - first version

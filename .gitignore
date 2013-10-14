@@ -24,3 +24,7 @@ cover_db/
 MYMETA.*
 
 /Redis-Namespace-*
+/.build
+/_build_params
+!Build/
+!META.json

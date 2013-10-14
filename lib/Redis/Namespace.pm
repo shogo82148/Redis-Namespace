@@ -1,4 +1,7 @@
 package Redis::Namespace;
+
+# ABSTRACT: a wrapper of Redis.pm that namespaces all Redis calls
+
 use strict;
 use warnings;
 our $VERSION = '0.01';
@@ -451,17 +454,47 @@ Redis::Namespace -
 
 =head1 SYNOPSIS
 
+  use Redis;
   use Redis::Namespace;
+  
+  my $redis = Redis->new;
+  my $ns = Redis::Namespace(redis => $redis, namespace => 'fugu');
+  
+  $ns->set('foo', 'bar');
+  # will call $redis->set('fugu:foo', 'bar');
+  
+  my $foo = $ns->get('foo');
+  # will call $redis->get('fugu:foo');
+
 
 =head1 DESCRIPTION
 
-Redis::Namespace is
+Redis::Namespace is a wrapper of Redis.pm that namespaces all Redis calls.
+It is useful when you have multiple systems using Redis differently in your app.
 
 =head1 AUTHOR
 
 Ichinose Shogo E<lt>shogo82148@gmail.comE<gt>
 
 =head1 SEE ALSO
+
+=over 4
+
+=item *
+
+L<Redis|http://redis.io/>
+
+=item *
+
+L<Redis.pm|https://github.com/melo/perl-redis>
+
+=item *
+
+L<redis-namespace|https://github.com/resque/redis-namespace>
+
+=back
+
+=cut
 
 =head1 LICENSE
 

@@ -4,7 +4,7 @@
       "Ichinose Shogo <shogo82148@gmail.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Minilla/v0.5.3, CPAN::Meta::Converter version 2.132140",
+   "generated_by" : "Minilla/v0.8.0, CPAN::Meta::Converter version 2.132661",
    "license" : [
       "perl_5"
    ],
@@ -21,7 +21,8 @@
          "share",
          "eg",
          "examples",
-         "author"
+         "author",
+         "builder"
       ]
    },
    "prereqs" : {
@@ -55,13 +56,13 @@
    "release_status" : "unstable",
    "resources" : {
       "bugtracker" : {
-         "web" : "https://github.com/shogo82148/Redis-Namepace/issues"
+         "web" : "https://github.com/shogo82148/Redis-Namespace/issues"
       },
-      "homepage" : "https://github.com/shogo82148/Redis-Namepace",
+      "homepage" : "https://github.com/shogo82148/Redis-Namespace",
       "repository" : {
          "type" : "git",
-         "url" : "git://github.com/shogo82148/Redis-Namepace.git",
-         "web" : "https://github.com/shogo82148/Redis-Namepace"
+         "url" : "git://github.com/shogo82148/Redis-Namespace.git",
+         "web" : "https://github.com/shogo82148/Redis-Namespace"
       }
    },
    "version" : "0.01"

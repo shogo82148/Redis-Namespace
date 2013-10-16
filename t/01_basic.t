@@ -6,6 +6,8 @@ use Test::RedisServer;
 
 use Redis::Namespace;
 
+eval { Test::RedisServer->new } or plan skip_all => 'redis-server is required in PATH to run this test';
+
 my $redis_server = Test::RedisServer->new;
 my $redis = Redis->new( $redis_server->connect_info );
 my $ns = Redis::Namespace->new(redis => $redis, namespace => 'ns');

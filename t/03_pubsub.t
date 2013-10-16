@@ -9,6 +9,8 @@ use Redis;
 use Redis::Namespace;
 use Test::RedisServer;
 
+eval { Test::RedisServer->new } or plan skip_all => 'redis-server is required in PATH to run this test';
+
 my $redis_server = Test::RedisServer->new;
 
 subtest 'basics' => sub {

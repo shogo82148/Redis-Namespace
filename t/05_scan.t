@@ -96,12 +96,76 @@ subtest 'scan count' => sub {
 
     # iterate keys
     iterate sub {
-        my ($iter, $list) = $ns->scan($_[0], COUNT => 1);
-        cmp_ok scalar @$list, '<=', 1;
-        return ($iter, $list);
+        $ns->scan($_[0], COUNT => 1);
     }, sub {
-        is $ns->get($_[0]) => 'ns';
+        is $ns->get($_[0]) => 'ns', 'key is in namespace';
     };
+
+    $redis->flushall;
+};
+
+
+subtest 'sscan' => sub {
+    # add keys for test
+    $redis->flushall;
+    for my $i(1..5) {
+        ok $redis->sadd("ns:set", "set-$i"), 'sadd';
+    }
+
+    # iterate keys
+    iterate sub {
+        my ($iter, $list) = $ns->sscan('set', $_[0]);
+    }, sub {
+        ok !$ns->sadd('set', $_[0]), 'set contains item';
+    };
+
+    $redis->flushall;
+};
+
+
+subtest 'hscan' => sub {
+    $redis->flushall;
+    my @hash = (
+        hoge => 'fuga',
+        homu => 'homu',
+        foo  => 'bar',
+        fizz => 'buzz',
+    );
+    ok $redis->hmset('ns:hash', @hash), 'create hash';
+
+    # iterate keys
+    my @result;
+    iterate sub {
+        my ($iter, $list) = $ns->hscan('hash', $_[0]);
+    }, sub {
+        push @result, @_;
+    };
+    is_deeply {@result}, {@hash}, 'hscan result';
+
+    $redis->flushall;
+};
+
+
+subtest 'zscan' => sub {
+    $redis->flushall;
+    my %hash = (
+        hoge => 3,
+        homu => 1,
+        foo  => 4,
+        fizz => 2,
+    );
+    while(my ($key, $score) = each %hash) {
+        ok $redis->zadd('ns:zset', $score, $key), 'zadd';
+    }
+
+    # iterate keys
+    my @result;
+    iterate sub {
+        my ($iter, $list) = $ns->zscan('zset', $_[0]);
+    }, sub {
+        push @result, @_;
+    };
+    is_deeply {@result}, {%hash}, 'zscan result';
 
     $redis->flushall;
 };

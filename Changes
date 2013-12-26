@@ -1,6 +1,8 @@
 Revision history for Perl extension Redis::Namespace
 
 {{$NEXT}}
+	- support scan/sscan/hscan/zscan
+	- fix test for Redis-2.8
 
 0.01 2013-10-14T12:43:45Z
         - first version

@@ -18,6 +18,18 @@ plan skip_all => 'your redis does not support SCAN command'
 
 is $ns->ping, 'PONG', 'ping pong ok';
 
+sub iterate {
+    my ($command, $test) = @_;
+    my ($iter, $list) = (0, []);
+    while(1) {
+        ($iter, $list) = $command->($iter);
+        for my $key(@$list) {
+            $test->($key);
+        }
+        last if $iter == 0;
+    }
+}
+
 
 subtest 'Empty database' => sub {
     $redis->flushall;
@@ -37,14 +49,11 @@ subtest 'iterate' => sub {
     }
 
     # iterate keys
-    my ($iter, $list) = (0, []);
-    while(1) {
-        ($iter, $list) = $ns->scan($iter);
-        for my $key(@$list) {
-            is $ns->get($key) => 'ns';
-        }
-        last if $iter == 0;
-    }
+    iterate sub {
+        $ns->scan($_[0]);
+    }, sub {
+        is $ns->get($_[0]) => 'ns';
+    };
 
     $redis->flushall;
 };

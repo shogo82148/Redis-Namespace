@@ -58,4 +58,52 @@ subtest 'iterate' => sub {
     $redis->flushall;
 };
 
+
+subtest 'scan match' => sub {
+    # add keys for test
+    $redis->flushall;
+    for my $i(1..5) {
+        $redis->set("ns:hoge$i", 'hoge');
+        $redis->set("ns:fuga$i", 'fuga');
+        $redis->set("other-ns:hoge$i", 'other-ns');
+    }
+
+    # iterate keys which matches 'hoge*'
+    iterate sub {
+        $ns->scan($_[0], MATCH => 'hoge*');
+    }, sub {
+        is $ns->get($_[0]) => 'hoge';
+    };
+
+    # iterate keys which matches 'fuga*'
+    iterate sub {
+        $ns->scan($_[0], MATCH => 'fuga*');
+    }, sub {
+        is $ns->get($_[0]) => 'fuga';
+    };
+
+    $redis->flushall;
+};
+
+
+subtest 'scan count' => sub {
+    # add keys for test
+    $redis->flushall;
+    for my $i(1..5) {
+        $redis->set("ns:hoge$i", 'ns');
+        $redis->set("other-ns:hoge$i", 'other-ns');
+    }
+
+    # iterate keys
+    iterate sub {
+        my ($iter, $list) = $ns->scan($_[0], COUNT => 1);
+        cmp_ok scalar @$list, '<=', 1;
+        return ($iter, $list);
+    }, sub {
+        is $ns->get($_[0]) => 'ns';
+    };
+
+    $redis->flushall;
+};
+
 done_testing;

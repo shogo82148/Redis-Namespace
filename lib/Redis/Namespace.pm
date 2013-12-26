@@ -1,7 +1,5 @@
 package Redis::Namespace;
 
-# ABSTRACT: a wrapper of Redis.pm that namespaces all Redis calls
-
 use strict;
 use warnings;
 our $VERSION = '0.01';
@@ -494,9 +492,12 @@ sub punsubscribe {
 1;
 __END__
 
-=head1 AUTHOR
+=encoding utf-8
 
-Ichinose Shogo E<lt>shogo82148@gmail.comE<gt>
+=head1 NAME
+
+Redis::Namespace - a wrapper of Redis.pm that namespaces all Redis calls
+
 
 =head1 SYNOPSIS
 
@@ -517,6 +518,12 @@ Ichinose Shogo E<lt>shogo82148@gmail.comE<gt>
 
 Redis::Namespace is a wrapper of Redis.pm that namespaces all Redis calls.
 It is useful when you have multiple systems using Redis differently in your app.
+
+
+=head1 AUTHOR
+
+Ichinose Shogo E<lt>shogo82148@gmail.comE<gt>
+
 
 =head1 SEE ALSO
 

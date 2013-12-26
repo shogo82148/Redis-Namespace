@@ -1,6 +1,8 @@
-# AUTHOR
+# NAME
 
-Ichinose Shogo <shogo82148@gmail.com>
+Redis::Namespace - a wrapper of Redis.pm that namespaces all Redis calls
+
+
 
 # SYNOPSIS
 
@@ -25,6 +27,14 @@ Ichinose Shogo <shogo82148@gmail.com>
 
 Redis::Namespace is a wrapper of Redis.pm that namespaces all Redis calls.
 It is useful when you have multiple systems using Redis differently in your app.
+
+
+
+# AUTHOR
+
+Ichinose Shogo <shogo82148@gmail.com>
+
+
 
 # SEE ALSO
 

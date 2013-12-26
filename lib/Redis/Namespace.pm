@@ -113,6 +113,41 @@ our %BEFORE_FILTERS = (
         my @keys = $self->add_namespace(splice @args, 0, $number);
         return ($self->add_namespace($first), $number, @keys, @args);
     },
+
+
+    scan => sub {
+        my ($self, @args) = @_;
+        my @res;
+
+        # first arg is iteration key
+        if(@args) {
+            my $first = shift @args;
+            push @res, $first;
+        }
+
+        # parse options
+        my $has_pattern = 0;
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'match') {
+                my $pattern = shift @args;
+                push @res, $option, $self->add_namespace($pattern);
+                $has_pattern = 1;
+            } elsif($option eq 'count') {
+                my $count = shift @args;
+                push @res, $option, $count;
+            } else {
+                push @res, $option;
+            }
+        }
+
+        # add pattern option
+        unless($has_pattern) {
+            push @res, 'match', $self->add_namespace('*');
+        }
+
+        return @res;
+    },
 );
 
 our %AFTER_FILTERS = (
@@ -132,6 +167,12 @@ our %AFTER_FILTERS = (
     first => sub {
         my ($self, $first, @args) = @_;
         return ($self->rem_namespace($first), @args);
+    },
+
+    scan => sub {
+        my ($self, $iter, $list) = @_;
+        my @keys = map { $self->rem_namespace($_) } @$list;
+        return ($iter, \@keys);
     }
 );
 
@@ -299,6 +340,7 @@ our %COMMANDS = (
     slaveof          => [],
     smembers         => [ 'first' ],
     smove            => [ 'exclude_last' ],
+    scan             => [ 'scan', 'scan' ],
     sort             => [ 'sort'  ],
     spop             => [ 'first' ],
     srandmember      => [ 'first' ],

@@ -98,6 +98,7 @@ subtest 'transaction with error and no pipeline' => sub {
 
 
 subtest 'wait_one_response' => sub {
+    plan skip_all => 'your Redis.pm does not support wait_one_response' if $Redis::VERSION lt '1.961';
     my $first;
     my $second;
 

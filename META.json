@@ -42,7 +42,8 @@
       },
       "runtime" : {
          "requires" : {
-            "Redis" : "0"
+            "Redis" : "0",
+            "perl" : "5.010000"
          }
       },
       "test" : {

@@ -191,7 +191,8 @@ sub add_namespace {
         } elsif($type eq 'HASH') {
             my %hash;
             while (my ($key, $value) = each %$item) {
-                $hash{$self->add_namespace($key)} = $value;
+                my ($new_key) = $self->add_namespace($key);
+                $hash{$new_key} = $value;
             }
             push @result, \%hash;
         } else {
@@ -221,7 +222,8 @@ sub rem_namespace {
         } elsif($type eq 'HASH') {
             my %hash;
             while (my ($key, $value) = each %$item) {
-                $hash{$self->rem_namespace($key)} = $value;
+                my ($new_key) = $self->rem_namespace($key);
+                $hash{$new_key} = $value;
             }
             push @result, \%hash;
         } else {

@@ -211,11 +211,11 @@ sub rem_namespace {
     for my $item(@args) {
         my $type = ref $item;
         if($item && !$type) {
-            $item =~ s/^$namespace://;
+            $item =~ s/^\Q$namespace://;
             push @result, $item;
         } elsif($type eq 'SCALAR') {
             my $tmp = $$item;
-            $tmp =~ s/^$namespace://;
+            $tmp =~ s/^\Q$namespace://;
             push @result, \$tmp;
         } elsif($type eq 'ARRAY') {
             push @result, [$self->rem_namespace(@$item)];

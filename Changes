@@ -2,6 +2,9 @@ Revision history for Perl extension Redis::Namespace
 
 {{$NEXT}}
 
+0.04 2015-07-09T16:26:03Z
+        - support namespaces including special chars (thx karupanerura)
+
 0.03 2014-09-13T10:00:47Z
         - fix build prereq
 

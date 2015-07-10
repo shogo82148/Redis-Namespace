@@ -8,6 +8,8 @@ test_requires 'Test::Fatal';
 on 'test' => sub {
    requires 'Test::More';
    requires 'Test::Exception';
+   requires 'Test::Deep';
+   requires 'Test::Fatal';
    requires 'File::Temp';
    requires 'Test::RedisServer';
    requires 'Test::Kwalitee';

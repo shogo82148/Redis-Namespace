@@ -99,7 +99,7 @@ sub test_command {
         ok $Redis::Namespace::BEFORE_FILTERS{$before}, "exists before filter: $before";
         if (ok my $test = $before_tests{$before}, "exists test for before fileter: $before") {
             $test->(
-                map { +{ name => $_, type => 'subcommand'} } @subcommand,
+                (map { +{ name => $_, type => 'subcommand'} } @subcommand),
                 @{$info->{arguments}},
             );
         }

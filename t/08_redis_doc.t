@@ -5,6 +5,23 @@ use Furl;
 use JSON;
 use Redis::Namespace;
 
+our %custom_test = (
+    OBJECT => sub {
+        my ($key, $info) = @_;
+        my $args = $info->{arguments};
+        is $args->[0]{type}, 'string';
+    },
+    PSUBSCRIBE => sub { pass },
+    PUBLISH => sub { pass },
+    PUBSUB => sub { pass },
+    SUBSCRIBE => sub { pass },
+    UNSUBSCRIBE => sub { pass },
+    'SCRIPT EXISTS' => sub { pass },
+    'SCRIPT FLUSH' => sub { pass },
+    'SCRIPT KILL' => sub { pass },
+    'SCRIPT LOAD' => sub { pass },
+);
+
 sub test {
     my $url = 'https://raw.githubusercontent.com/antirez/redis-doc/master/commands.json';
     my $furl = Furl->new;
@@ -13,23 +30,28 @@ sub test {
 
     for my $key (sort keys %$json) {
         subtest $key => sub {
-            test_command($key, $json->{$key});
+            my $test = $custom_test{$key} // \&test_command;
+            $test->($key, $json->{$key});
         };
     }
 }
 
 our %before_tests = (
-    none => sub {},
+    none => sub {
+        for my $arg (@_) {
+            ok !($arg->{type} eq 'key' || $arg->{type} eq 'pattern'), $arg->{name};
+        }
+    },
     first => sub {
         my ($first, @extra) = @_;
-        is $first->{type}, 'key', $first->{name};
+        ok $first->{type} eq 'key' || $first->{type} eq 'pattern', $first->{name};
         for my $arg (@extra) {
             isnt $arg->{type}, 'key', $arg->{name};
         }
     },
     all => sub {
         for my $arg (@_) {
-            is $arg->{type}, 'key', $arg->{name};
+            ok $arg->{type} eq 'key' || $arg->{type} eq 'pattern', $arg->{name};
         }
     },
     exclude_first => sub {
@@ -88,6 +110,13 @@ our %before_tests = (
             }
         }
     },
+    migrate => sub {
+        my ($host, $port, $key, $db) = @_;
+        is $host->{type}, 'string', $host->{name};
+        is $port->{type}, 'string', $port->{name};
+        is $key->{type}, 'key', $key->{name};
+        is $db->{type}, 'integer', $db->{name};
+    }
 );
 
 sub test_command {
@@ -95,14 +124,13 @@ sub test_command {
     my ($command, @subcommand) = split / /, lc $key;
     ok my $option = $Redis::Namespace::COMMANDS{$command}, 'exists args tranfer definition' or return;
     my ($before, $after) = @$option;
-    if ($before) {
-        ok $Redis::Namespace::BEFORE_FILTERS{$before}, "exists before filter: $before";
-        if (ok my $test = $before_tests{$before}, "exists test for before fileter: $before") {
-            $test->(
-                (map { +{ name => $_, type => 'subcommand'} } @subcommand),
-                @{$info->{arguments}},
-            );
-        }
+    $before //= 'none';
+    ok $Redis::Namespace::BEFORE_FILTERS{$before}, "exists before filter: $before";
+    if (ok my $test = $before_tests{$before}, "exists test for before fileter: $before") {
+        $test->(
+            (map { +{ name => $_, type => 'subcommand'} } @subcommand),
+            @{$info->{arguments}},
+        );
     }
     if ($after) {
         ok $Redis::Namespace::BEFORE_FILTERS{$after}, "exists after filter $after";

@@ -239,6 +239,7 @@ our %COMMANDS = (
     bgrewriteaof     => [],
     bgsave           => [],
     bitcount         => [ 'first' ],
+    bitpos           => [ 'first' ],
     bitop            => [ 'exclude_first' ],
     blpop            => [ 'exclude_last', 'first' ],
     brpop            => [ 'exclude_last' ],

@@ -151,7 +151,7 @@ our %BEFORE_FILTERS = (
     migrate => sub {
         my ($self, @args) = @_;
         if(scalar @args >= 3) {
-            $args[2] = $self->add_namespace($args[2]);
+            ($args[2]) = $self->add_namespace($args[2]);
         }
         return @args;
     },
@@ -425,6 +425,7 @@ sub new {
     $self->{namespace} = $args{namespace};
     $self->{warning} = $args{warning};
     $self->{subscribers} = {};
+    $self->{guess} = $args{guess};
     return $self;
 }
 

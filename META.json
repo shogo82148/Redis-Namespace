@@ -71,8 +71,9 @@
          "web" : "https://github.com/shogo82148/Redis-Namespace"
       }
    },
-   "version" : "0.04",
+   "version" : "0.05",
    "x_contributors" : [
-      "karupanerura <karupa@cpan.org>"
+      "karupanerura <karupa@cpan.org>",
+      "Mihyaeru <mihyaeru21@gmail.com>"
    ]
 }

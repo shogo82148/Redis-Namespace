@@ -507,7 +507,7 @@ Redis::Namespace - a wrapper of Redis.pm that namespaces all Redis calls
   use Redis::Namespace;
   
   my $redis = Redis->new;
-  my $ns = Redis::Namespace(redis => $redis, namespace => 'fugu');
+  my $ns = Redis::Namespace->new(redis => $redis, namespace => 'fugu');
   
   $ns->set('foo', 'bar');
   # will call $redis->set('fugu:foo', 'bar');

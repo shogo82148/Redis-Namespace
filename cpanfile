@@ -12,6 +12,7 @@ on 'test' => sub {
    requires 'Test::Exception';
    requires 'Test::Deep';
    requires 'Test::Fatal';
+   requires 'Test::TCP';
    requires 'File::Temp';
    requires 'Test::RedisServer';
    requires 'Test::Kwalitee';

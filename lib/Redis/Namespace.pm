@@ -606,6 +606,8 @@ It is useful when you have multiple systems using Redis differently in your app.
 
 =head1 OPTIONS
 
+=over 4
+
 =item redis
 
 An instance of L<Redis.pm|https://github.com/melo/perl-redis> or L<Redis::Fast|https://github.com/shogo82148/Redis-Fast>.
@@ -644,8 +646,6 @@ L<Redis.pm|https://github.com/melo/perl-redis>
 L<redis-namespace|https://github.com/resque/redis-namespace>
 
 =back
-
-=cut
 
 =head1 LICENSE
 

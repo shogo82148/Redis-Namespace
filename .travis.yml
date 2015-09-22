@@ -12,3 +12,4 @@ before_install:
   cpanm Minilla Test::CPAN::Meta Test::Pod Test::MinimumVersion::Fast
 script:
   minil test --all
+sudo: false

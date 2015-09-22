@@ -1,6 +1,8 @@
 Revision history for Perl extension Redis::Namespace
 
 {{$NEXT}}
+
+0.06 2015-09-22T03:30:34Z
         - support commands of Redis 3.0
         - add guess option
 

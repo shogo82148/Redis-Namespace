@@ -57,7 +57,8 @@
             "Test::Kwalitee" : "0",
             "Test::Kwalitee::Extra" : "0",
             "Test::More" : "0",
-            "Test::RedisServer" : "0"
+            "Test::RedisServer" : "0",
+            "Test::TCP" : "0"
          }
       }
    },
@@ -73,7 +74,7 @@
          "web" : "https://github.com/shogo82148/Redis-Namespace"
       }
    },
-   "version" : "0.05",
+   "version" : "0.06",
    "x_contributors" : [
       "karupanerura <karupa@cpan.org>",
       "Mihyaeru <mihyaeru21@gmail.com>"

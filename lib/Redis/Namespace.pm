@@ -425,7 +425,15 @@ sub new {
     $self->{namespace} = $args{namespace};
     $self->{warning} = $args{warning};
     $self->{subscribers} = {};
-    $self->{guess} = $args{guess};
+    if ($args{guess}) {
+        my $version = $self->{redis}->info->{redis_version};
+        my ($major, $minor, $rev) = split /\./, $version;
+        if ( $major >= 3 || $major == 2 && $minor >= 8 && $rev >= 13 ) {
+            $self->{guess} = 1;
+        } elsif ($self->{warning}) {
+            warn "guess option requires 2.8.13 or later. your redis version is $version";
+        }
+    }
     return $self;
 }
 
@@ -433,17 +441,28 @@ sub _wrap_method {
     my ($class, $command) = @_;
     my $filters = $COMMANDS{$command};
     my $warn_message;
-    unless($filters) {
-        $warn_message = "Passing '$command' to redis as is.";
-        $filters = ['none', 'none'];
+    my ($before, $after);
+
+    if ($filters) {
+        $before = $BEFORE_FILTERS{$filters->[0] // 'none'};
+        $after = $AFTER_FILTERS{$filters->[1] // 'none'};
     }
-    my $before = $BEFORE_FILTERS{$filters->[0] // 'none'};
-    my $after = $AFTER_FILTERS{$filters->[1] // 'none'};
 
     return sub {
         my ($self, @args) = @_;
         my $redis = $self->{redis};
         my $wantarray = wantarray;
+
+        if (!$before || !$after) {
+            if ($self->{guess}) {
+                ($before, $after, $warn_message) = $self->_guess($command);
+            } else {
+                $warn_message = "Passing '$command' to redis as is.";
+                $before = $BEFORE_FILTERS{none};
+                $after = $AFTER_FILTERS{none};
+            }
+        }
+
         warn $warn_message if $warn_message && $self->{warning};
 
         if(@args && ref $args[-1] eq 'CODE') {
@@ -467,6 +486,32 @@ sub _wrap_method {
             return $after->($self, $result);
         }
     };
+}
+
+sub _guess {
+    my ($self, $command) = @_;
+    my $info = $self->{redis}->command('info', $command);
+    my ($name, $num, $flags, $first, $last, $step) = @{$info->[0]};
+    my ($movablekeys) = grep { $_ eq 'movablekeys' } @{$flags || []};
+
+    unless ($name) {
+        return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none}, "Unknown command. Passing '$command' to redis as is.";
+    }
+
+    if ($movablekeys) {
+        return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none}, "movablekeys command. Passing '$command' to redis as is.";
+    }
+
+    my $before = sub {
+        my ($self, @args) = @_;
+        if ($first > 0) {
+            for (my $i = $first; $i <= @args && ($last < 0 || $i <= $last); $i += $step) {
+                ($args[$i-1]) = $self->add_namespace($args[$i-1]);
+            }
+        }
+        return @args;
+    };
+    return $before, $AFTER_FILTERS{none};
 }
 
 sub DESTROY { }

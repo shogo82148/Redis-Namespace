@@ -49,6 +49,8 @@
       "test" : {
          "requires" : {
             "File::Temp" : "0",
+            "Furl" : "0",
+            "JSON" : "0",
             "Test::Deep" : "0",
             "Test::Exception" : "0",
             "Test::Fatal" : "0",

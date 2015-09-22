@@ -146,6 +146,15 @@ our %BEFORE_FILTERS = (
 
         return @res;
     },
+
+    # MIGRATE host port key destination-db timeout => MIGRATE host port namespace:key destination-db timeout
+    migrate => sub {
+        my ($self, @args) = @_;
+        if(scalar @args >= 3) {
+            ($args[2]) = $self->add_namespace($args[2]);
+        }
+        return @args;
+    },
 );
 
 our %AFTER_FILTERS = (
@@ -239,10 +248,14 @@ our %COMMANDS = (
     bgrewriteaof     => [],
     bgsave           => [],
     bitcount         => [ 'first' ],
+    bitpos           => [ 'first' ],
     bitop            => [ 'exclude_first' ],
     blpop            => [ 'exclude_last', 'first' ],
     brpop            => [ 'exclude_last' ],
     brpoplpush       => [ 'exclude_last' ],
+    client           => [],
+    cluster          => [],
+    command          => [],
     config           => [],
     dbsize           => [],
     debug            => [ 'exclude_first' ],
@@ -260,6 +273,12 @@ our %COMMANDS = (
     exec             => [],
     flushall         => [],
     flushdb          => [],
+    geoadd           => [ 'first' ],
+    geodist          => [ 'first' ],
+    geohash          => [ 'first' ],
+    geopos           => [ 'first' ],
+    georadius        => [ 'first' ],
+    georadiusbymember=> [ 'first' ],
     get              => [ 'first' ],
     getbit           => [ 'first' ],
     getrange         => [ 'first' ],
@@ -267,6 +286,7 @@ our %COMMANDS = (
     hscan            => [ 'first' ],
     hset             => [ 'first' ],
     hsetnx           => [ 'first' ],
+    hstrlen          => [ 'first' ],
     hget             => [ 'first' ],
     hincrby          => [ 'first' ],
     hincrbyfloat     => [ 'first' ],
@@ -300,7 +320,8 @@ our %COMMANDS = (
     mapped_mset      => [ 'all' ],
     mapped_msetnx    => [ 'all' ],
     mget             => [ 'all' ],
-    monitor          => [ 'monitor' ],
+    migrate          => [ 'migrate' ],
+    monitor          => [],
     move             => [ 'first' ],
     mscan            => [ 'first' ],
     mset             => [ 'alternate' ],
@@ -309,6 +330,9 @@ our %COMMANDS = (
     persist          => [ 'first' ],
     pexpire          => [ 'first' ],
     pexpireat        => [ 'first' ],
+    pfadd            => [ 'first' ],
+    pfcount          => [ 'all' ],
+    pfmerge          => [ 'all' ],
     ping             => [],
     psetex           => [ 'first' ],
     psubscribe       => [ 'all' ],
@@ -317,9 +341,12 @@ our %COMMANDS = (
     punsubscribe     => [ 'all' ],
     quit             => [],
     randomkey        => [],
+    readonly         => [],
+    readwrite        => [],
     rename           => [ 'all' ],
     renamenx         => [ 'all' ],
     restore          => [ 'first' ],
+    role             => [],
     rpop             => [ 'first' ],
     rpoplpush        => [ 'all' ],
     rpush            => [ 'first' ],
@@ -327,6 +354,7 @@ our %COMMANDS = (
     sadd             => [ 'first' ],
     save             => [],
     scard            => [ 'first' ],
+    script           => [],
     sdiff            => [ 'all' ],
     sdiffstore       => [ 'all' ],
     select           => [],
@@ -340,6 +368,7 @@ our %COMMANDS = (
     sinterstore      => [ 'all' ],
     sismember        => [ 'first' ],
     slaveof          => [],
+    slowlog          => [],
     smembers         => [ 'first' ],
     smove            => [ 'exclude_last' ],
     scan             => [ 'scan', 'scan' ],
@@ -352,22 +381,30 @@ our %COMMANDS = (
     subscribe        => [ 'all' ],
     sunion           => [ 'all' ],
     sunionstore      => [ 'all' ],
+    sync             => [],
+    time             => [],
     ttl              => [ 'first' ],
     type             => [ 'first' ],
     unsubscribe      => [ 'all' ],
+    unwatch          => [],
+    wait             => [],
     watch            => [ 'all' ],
     zadd             => [ 'first' ],
     zcard            => [ 'first' ],
     zcount           => [ 'first' ],
     zincrby          => [ 'first' ],
     zinterstore      => [ 'exclude_options' ],
+    zlexcount        => [ 'first' ],
     zrange           => [ 'first' ],
+    zrangebylex      => [ 'first' ],
     zrangebyscore    => [ 'first' ],
     zrank            => [ 'first' ],
     zrem             => [ 'first' ],
+    zremrangebylex   => [ 'first' ],
     zremrangebyrank  => [ 'first' ],
     zremrangebyscore => [ 'first' ],
     zrevrange        => [ 'first' ],
+    zrevrangebylex   => [ 'first' ],
     zrevrangebyscore => [ 'first' ],
     zrevrank         => [ 'first' ],
     zscan            => [ 'first' ],
@@ -388,6 +425,15 @@ sub new {
     $self->{namespace} = $args{namespace};
     $self->{warning} = $args{warning};
     $self->{subscribers} = {};
+    if ($args{guess}) {
+        my $version = $self->{redis}->info->{redis_version};
+        my ($major, $minor, $rev) = split /\./, $version;
+        if ( $major >= 3 || $major == 2 && $minor >= 8 && $rev >= 13 ) {
+            $self->{guess} = 1;
+        } elsif ($self->{warning}) {
+            warn "guess option requires 2.8.13 or later. your redis version is $version";
+        }
+    }
     return $self;
 }
 
@@ -395,17 +441,28 @@ sub _wrap_method {
     my ($class, $command) = @_;
     my $filters = $COMMANDS{$command};
     my $warn_message;
-    unless($filters) {
-        $warn_message = "Passing '$command' to redis as is.";
-        $filters = ['none', 'none'];
+    my ($before, $after);
+
+    if ($filters) {
+        $before = $BEFORE_FILTERS{$filters->[0] // 'none'};
+        $after = $AFTER_FILTERS{$filters->[1] // 'none'};
     }
-    my $before = $BEFORE_FILTERS{$filters->[0] // 'none'};
-    my $after = $AFTER_FILTERS{$filters->[1] // 'none'};
 
     return sub {
         my ($self, @args) = @_;
         my $redis = $self->{redis};
         my $wantarray = wantarray;
+
+        if (!$before || !$after) {
+            if ($self->{guess}) {
+                ($before, $after, $warn_message) = $self->_guess($command);
+            } else {
+                $warn_message = "Passing '$command' to redis as is.";
+                $before = $BEFORE_FILTERS{none};
+                $after = $AFTER_FILTERS{none};
+            }
+        }
+
         warn $warn_message if $warn_message && $self->{warning};
 
         if(@args && ref $args[-1] eq 'CODE') {
@@ -429,6 +486,32 @@ sub _wrap_method {
             return $after->($self, $result);
         }
     };
+}
+
+sub _guess {
+    my ($self, $command) = @_;
+    my $info = $self->{redis}->command('info', $command);
+    my ($name, $num, $flags, $first, $last, $step) = @{$info->[0]};
+    my ($movablekeys) = grep { $_ eq 'movablekeys' } @{$flags || []};
+
+    unless ($name) {
+        return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none}, "Unknown command. Passing '$command' to redis as is.";
+    }
+
+    if ($movablekeys) {
+        return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none}, "movablekeys command. Passing '$command' to redis as is.";
+    }
+
+    my $before = sub {
+        my ($self, @args) = @_;
+        if ($first > 0) {
+            for (my $i = $first; $i <= @args && ($last < 0 || $i <= $last); $i += $step) {
+                ($args[$i-1]) = $self->add_namespace($args[$i-1]);
+            }
+        }
+        return @args;
+    };
+    return $before, $AFTER_FILTERS{none};
 }
 
 sub DESTROY { }
@@ -521,6 +604,25 @@ Redis::Namespace - a wrapper of Redis.pm that namespaces all Redis calls
 Redis::Namespace is a wrapper of Redis.pm that namespaces all Redis calls.
 It is useful when you have multiple systems using Redis differently in your app.
 
+=head1 OPTIONS
+
+=over 4
+
+=item redis
+
+An instance of L<Redis.pm|https://github.com/melo/perl-redis> or L<Redis::Fast|https://github.com/shogo82148/Redis-Fast>.
+
+=item namespace
+
+prefix of keys.
+
+=item guess
+
+If Redis::Namespace doesn't known the command,
+call L<command info|http://redis.io/commands/command-info> and guess postions of keys.
+It is boolean value.
+
+=back
 
 =head1 AUTHOR
 
@@ -544,8 +646,6 @@ L<Redis.pm|https://github.com/melo/perl-redis>
 L<redis-namespace|https://github.com/resque/redis-namespace>
 
 =back
-
-=cut
 
 =head1 LICENSE
 

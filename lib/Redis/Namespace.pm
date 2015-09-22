@@ -604,6 +604,23 @@ Redis::Namespace - a wrapper of Redis.pm that namespaces all Redis calls
 Redis::Namespace is a wrapper of Redis.pm that namespaces all Redis calls.
 It is useful when you have multiple systems using Redis differently in your app.
 
+=head1 OPTIONS
+
+=item redis
+
+An instance of L<Redis.pm|https://github.com/melo/perl-redis> or L<Redis::Fast|https://github.com/shogo82148/Redis-Fast>.
+
+=item namespace
+
+prefix of keys.
+
+=item guess
+
+If Redis::Namespace doesn't known the command,
+call L<command info|http://redis.io/commands/command-info> and guess postions of keys.
+It is boolean value.
+
+=back
 
 =head1 AUTHOR
 

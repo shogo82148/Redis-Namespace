@@ -3,6 +3,8 @@ use Test::More;
 use Redis;
 use Test::RedisServer;
 
+eval { Test::RedisServer->new } or plan skip_all => 'redis-server is required in PATH to run this test';
+
 use Redis::Namespace;
 %Redis::Namespace::COMMANDS = ();
 

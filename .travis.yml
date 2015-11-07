@@ -16,5 +16,6 @@ install:
   - cpanm --notest Minilla Test::CPAN::Meta Test::Pod Test::MinimumVersion::Fast
   - cpanm --quiet --installdeps --notest .
 script:
-  PATH=$PWD/redis-$REDIS_VERSION:$PATH minil test --all
+  - PATH=$PWD/redis-$REDIS_VERSION:$PATH redis-server --version
+  - PATH=$PWD/redis-$REDIS_VERSION:$PATH minil test --all
 sudo: false

@@ -30,7 +30,7 @@ subtest 'basic MIGRATE test' => sub {
     $redis1->flushall;
     $redis2->flushall;
     $ns1->set('hogehoge', 'foobar');
-    $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60);
+    is $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60), 'OK';
     is $ns1->get('hogehoge'), undef;
     is $ns2->get('hogehoge'), 'foobar';
 };
@@ -43,7 +43,7 @@ subtest 'COPY' => sub {
     $redis1->flushall;
     $redis2->flushall;
     $ns1->set('hogehoge', 'foobar');
-    $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60, 'COPY');
+    is $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60, 'COPY'), 'OK';
     is $ns1->get('hogehoge'), 'foobar';
     is $ns2->get('hogehoge'), 'foobar';
 };
@@ -57,7 +57,7 @@ subtest 'REPLACE' => sub {
     $redis2->flushall;
     $ns1->set('hogehoge', 'foobar');
     $ns2->set('hogehoge', 'xxxxxx');
-    $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60, 'REPLACE');
+    is $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60, 'REPLACE'), 'OK';
     is $ns1->get('hogehoge'), undef;
     is $ns2->get('hogehoge'), 'foobar';
 };
@@ -73,10 +73,10 @@ subtest 'multi keys' => sub {
     is $ns1->get("hogehoge$_"), undef, "hogehoge$_ is empty first" for 1..10;
 
     $ns1->set("hogehoge$_", "foobar$_") for 1..10;
-    $ns1->migrate(
+    is $ns1->migrate(
         'localhost', $server->port, '', 0, 60,
         'KEYS' => map { "hogehoge$_" } 1..10,
-    );
+    ), 'OK';
 
     is $ns2->get("hogehoge$_"), "foobar$_", "hogehoge$_ is set" for 1..10;
 };

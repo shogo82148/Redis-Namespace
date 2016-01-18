@@ -161,7 +161,7 @@ our %BEFORE_FILTERS = (
         while(@args) {
             my $option = lc shift @args;
             if($option eq 'keys') {
-                push @res, $self->add_namespace(@args);
+                push @res, $option, $self->add_namespace(@args);
                 @args = ();
             } else {
                 push @res, $option;

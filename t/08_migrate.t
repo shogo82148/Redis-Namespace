@@ -50,7 +50,7 @@ subtest 'multi keys' => sub {
         'KEYS' => map { "hogehoge$_" } 1..10,
     );
 
-    is $ns1->get("hogehoge$_"), "foobar$_", "hogehgoe$_ is set" for 1..10;
+    is $ns2->get("hogehoge$_"), "foobar$_", "hogehoge$_ is set" for 1..10;
 };
 
 done_testing;

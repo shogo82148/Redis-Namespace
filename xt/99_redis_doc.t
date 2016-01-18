@@ -111,11 +111,20 @@ our %before_tests = (
         }
     },
     migrate => sub {
-        my ($host, $port, $key, $db) = @_;
+        my ($host, $port, $key, $db, $timeout, @extra) = @_;
         is $host->{type}, 'string', $host->{name};
         is $port->{type}, 'string', $port->{name};
-        is $key->{type}, 'key', $key->{name};
+        is $key->{type}, 'enum', $key->{name};
+        is_deeply $key->{enum}, ['key', '""'], $key->{name};
         is $db->{type}, 'integer', $db->{name};
+        is $timeout->{type}, 'integer', $timeout->{name};
+        for my $arg (@extra) {
+            if ($arg->{command} eq 'KEYS') {
+                is $arg->{type}, 'key';
+            } else {
+                isnt $arg->{type}, 'key';
+            }
+        }
     }
 );
 

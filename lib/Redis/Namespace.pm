@@ -148,12 +148,26 @@ our %BEFORE_FILTERS = (
     },
 
     # MIGRATE host port key destination-db timeout => MIGRATE host port namespace:key destination-db timeout
+    # MIGRATE host port "" destination-db timeout KEYS => MIGRATE host port namespace:key destination-db timeout
     migrate => sub {
         my ($self, @args) = @_;
-        if(scalar @args >= 3) {
-            ($args[2]) = $self->add_namespace($args[2]);
+        my @res = splice @args, 0, 5;
+
+        # key may be the empty string in Redis-3.2 and above
+        if(scalar @res >= 3 && $res[2] ne '') {
+            ($res[2]) = $self->add_namespace($res[2]);
         }
-        return @args;
+
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'keys') {
+                push @res, $self->add_namespace(@args);
+                @args = ();
+            } else {
+                push @res, $option;
+            }
+        }
+        return @res;
     },
 );
 

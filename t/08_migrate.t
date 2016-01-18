@@ -31,6 +31,34 @@ subtest 'basic MIGRATE test' => sub {
     $redis2->flushall;
     $ns1->set('hogehoge', 'foobar');
     $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60);
+    is $ns1->get('hogehoge'), undef;
+    is $ns2->get('hogehoge'), 'foobar';
+};
+
+subtest 'COPY' => sub {
+    my $redis_version = version->parse($redis1->info->{redis_version});
+    plan skip_all => 'your redis does not support COPY clause of MIGRATE command'
+        unless $redis_version >= '3.0.0';
+
+    $redis1->flushall;
+    $redis2->flushall;
+    $ns1->set('hogehoge', 'foobar');
+    $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60, 'COPY');
+    is $ns1->get('hogehoge'), 'foobar';
+    is $ns2->get('hogehoge'), 'foobar';
+};
+
+subtest 'REPLACE' => sub {
+    my $redis_version = version->parse($redis1->info->{redis_version});
+    plan skip_all => 'your redis does not support REPLACE clause of MIGRATE command'
+        unless $redis_version >= '3.0.0';
+
+    $redis1->flushall;
+    $redis2->flushall;
+    $ns1->set('hogehoge', 'foobar');
+    $ns2->set('hogehoge', 'xxxxxx');
+    $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60, 'REPLACE');
+    is $ns1->get('hogehoge'), undef;
     is $ns2->get('hogehoge'), 'foobar';
 };
 

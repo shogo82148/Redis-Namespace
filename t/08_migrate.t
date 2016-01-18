@@ -37,7 +37,7 @@ subtest 'basic MIGRATE test' => sub {
 subtest 'multi keys' => sub {
     my $redis_version = version->parse($redis1->info->{redis_version});
     plan skip_all => 'your redis does not support KEYS clause of MIGRATE command'
-        unless $redis_version >= '3.2.0';
+        unless $redis_version >= '3.1.0';
 
     $redis1->flushall;
     $redis2->flushall;

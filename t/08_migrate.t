@@ -26,8 +26,31 @@ my $redis2 = Redis->new( server => 'localhost:' . $server->port);
 my $ns1 = Redis::Namespace->new(redis => $redis1, namespace => 'ns');
 my $ns2 = Redis::Namespace->new(redis => $redis2, namespace => 'ns');
 
-$ns1->set('hogehoge', 'foobar');
-$ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60);
-is $ns2->get('hogehoge'), 'foobar';
+subtest 'basic MIGRATE test' => sub {
+    $redis1->flushall;
+    $redis2->flushall;
+    $ns1->set('hogehoge', 'foobar');
+    $ns1->migrate('localhost', $server->port, 'hogehoge', 0, 60);
+    is $ns2->get('hogehoge'), 'foobar';
+};
+
+subtest 'multi keys' => sub {
+    my $redis_version = version->parse($redis1->info->{redis_version});
+    plan skip_all => 'your redis does not support KEYS clause of MIGRATE command'
+        unless $redis_version >= '3.2.0';
+
+    $redis1->flushall;
+    $redis2->flushall;
+
+    is $ns1->get("hogehoge$_"), undef, "hogehoge$_ is empty first" for 1..10;
+
+    $ns1->set("hogehoge$_", "foobar$_") for 1..10;
+    $ns1->migrate(
+        'localhost', $server->port, '', 0, 60,
+        'KEYS' => map { "hogehoge$_" } 1..10,
+    );
+
+    is $ns1->get("hogehoge$_"), "foobar$_", "hogehgoe$_ is set" for 1..10;
+};
 
 done_testing;

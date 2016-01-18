@@ -11,8 +11,8 @@ perl:
   - "5.10"
 env:
   - REDIS_VERSION=3.2-rc1
-  - REDIS_VERSION=3.0.5
-  - REDIS_VERSION=2.8.23
+  - REDIS_VERSION=3.0.6
+  - REDIS_VERSION=2.8.24
 install:
   - wget https://github.com/antirez/redis/archive/$REDIS_VERSION.tar.gz && tar xzf $REDIS_VERSION.tar.gz && make -C redis-$REDIS_VERSION
   - cpanm --quiet --installdeps --notest .

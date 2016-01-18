@@ -167,7 +167,6 @@ our %BEFORE_FILTERS = (
                 push @res, $option;
             }
         }
-        use DDP; p @res;
         return @res;
     },
 );

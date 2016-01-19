@@ -1,6 +1,8 @@
 Revision history for Perl extension Redis::Namespace
 
 {{$NEXT}}
+
+0.07 2016-01-19T00:48:31Z
         - support 3.2 pipelined migrate
         - fix some test
 

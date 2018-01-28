@@ -169,6 +169,64 @@ our %BEFORE_FILTERS = (
         }
         return @res;
     },
+
+    # GEORADIUS key longitude latitude radius m|km|ft|mi STORE key STOREDIST key => GEORADIUS namespace:key longitude latitude radius m|km|ft|mi STORE namespace:key STOREDIST namespace:key
+    georadius => sub {
+        my ($self, @args) = @_;
+        my @res;
+
+        # key
+        if(@args) {
+            my $first = shift @args;
+            push @res, $self->add_namespace($first);
+        }
+
+        # longitude latitude radius m|km|ft|mi
+        push @res, splice @args, 0, 4;
+
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'store' || $option eq 'storedist') {
+                my $key = shift @args;
+                push @res, $option, $self->add_namespace($key);
+            } elsif($option eq 'count') {
+                my $count = shift @args;
+                push @res, $option, $count;
+            } else {
+                push @res, $option;
+            }
+        }
+        return @res;
+    },
+
+    # GEORADIUSBYMEMBER key member radius m|km|ft|mi STORE key STOREDIST key => GEORADIUSBYMEMBER namespace:key member radius m|km|ft|mi STORE namespace:key STOREDIST namespace:key
+    georadiusbymember => sub {
+        my ($self, @args) = @_;
+        my @res;
+
+        # key
+        if(@args) {
+            my $first = shift @args;
+            push @res, $self->add_namespace($first);
+        }
+
+        # member radius m|km|ft|mi
+        push @res, splice @args, 0, 3;
+
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'store' || $option eq 'storedist') {
+                my $key = shift @args;
+                push @res, $option, $self->add_namespace($key);
+            } elsif($option eq 'count') {
+                my $count = shift @args;
+                push @res, $option, $count;
+            } else {
+                push @res, $option;
+            }
+        }
+        return @res;
+    },
 );
 
 our %AFTER_FILTERS = (
@@ -262,6 +320,7 @@ our %COMMANDS = (
     bgrewriteaof     => [],
     bgsave           => [],
     bitcount         => [ 'first' ],
+    bitfield         => [ 'first' ],
     bitpos           => [ 'first' ],
     bitop            => [ 'exclude_first' ],
     blpop            => [ 'exclude_last', 'first' ],
@@ -291,8 +350,8 @@ our %COMMANDS = (
     geodist          => [ 'first' ],
     geohash          => [ 'first' ],
     geopos           => [ 'first' ],
-    georadius        => [ 'first' ],
-    georadiusbymember=> [ 'first' ],
+    georadius        => [ 'georadius' ],
+    georadiusbymember=> [ 'georadiusbymember' ],
     get              => [ 'first' ],
     getbit           => [ 'first' ],
     getrange         => [ 'first' ],
@@ -395,11 +454,14 @@ our %COMMANDS = (
     subscribe        => [ 'all' ],
     sunion           => [ 'all' ],
     sunionstore      => [ 'all' ],
+    swapdb           => [],
     sync             => [],
     time             => [],
+    touch            => [ 'all' ],
     ttl              => [ 'first' ],
     type             => [ 'first' ],
     unsubscribe      => [ 'all' ],
+    unlink           => [ 'all' ],
     unwatch          => [],
     wait             => [],
     watch            => [ 'all' ],

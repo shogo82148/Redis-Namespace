@@ -426,5 +426,37 @@ subtest 'ZINTERSTORE/ZUNIONSTORE' => sub {
     $redis->flushall;
 };
 
+subtest 'GEORADIUS' => sub {
+    $redis->geoadd('ns:Sicily', 13.361389, 38.115556, "Palermo", 15.087269, 37.502669, "Catania");
+
+    is_deeply([$ns->georadius(Sicily => 15, 37, 200, "km", "ASC")], ["Catania", "Palermo"], "GEORADIUS");
+
+    # STORE key
+    $ns->georadius(Sicily => 15, 37, 200, "km", STORE => "result");
+    is_deeply([$redis->zrange('ns:result', 0, -1)], ["Palermo", "Catania"]);
+
+    # STOREDIST key
+    $ns->georadius(Sicily => 15, 37, 200, "km", STOREDIST => "result");
+    is_deeply([$redis->zrange('ns:result', 0, -1)], ["Catania", "Palermo"]);
+
+    $redis->flushall;
+};
+
+subtest 'GEORADIUS' => sub {
+    $redis->geoadd('ns:Sicily', 13.361389, 38.115556, "Palermo", 15.087269, 37.502669, "Catania");
+
+    is_deeply([$ns->georadiusbymember(Sicily => "Catania", 200, "km", "ASC")], ["Catania", "Palermo"], "GEORADIUS");
+
+    # STORE key
+    $ns->georadiusbymember(Sicily => "Catania", 200, "km", STORE => "result");
+    is_deeply([$redis->zrange('ns:result', 0, -1)], ["Palermo", "Catania"]);
+
+    # STOREDIST key
+    $ns->georadiusbymember(Sicily => "Catania", 200, "km", STOREDIST => "result");
+    is_deeply([$redis->zrange('ns:result', 0, -1)], ["Catania", "Palermo"]);
+
+    $redis->flushall;
+};
+
 done_testing;
 

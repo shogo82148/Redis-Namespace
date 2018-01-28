@@ -515,7 +515,8 @@ sub new {
 
 sub _wrap_method {
     my ($class, $command) = @_;
-    my $filters = $COMMANDS{$command};
+    my ($cmd, @extra) = split /_/, lc($command);
+    my $filters = $COMMANDS{$cmd};
     my $warn_message;
     my ($before, $after);
 
@@ -543,22 +544,22 @@ sub _wrap_method {
 
         if(@args && ref $args[-1] eq 'CODE') {
             my $cb = pop @args;
-            @args = $before->($self, @args);
+            @args = $before->($self, @extra, @args);
             push @args, sub {
                 my ($result, $error) = @_;
                 $cb->($after->($self, $result), $error);
             };
         } else {
-            @args = $before->($self, @args);
+            @args = $before->($self, @extra, @args);
         }
 
         if(!$wantarray) {
-            $redis->$command(@args);
+            $redis->$cmd(@args);
         } elsif($wantarray) {
-            my @result = $redis->$command(@args);
+            my @result = $redis->$cmd(@args);
             return $after->($self, @result);
         } else {
-            my $result = $redis->$command(@args);
+            my $result = $redis->$cmd(@args);
             return $after->($self, $result);
         }
     };

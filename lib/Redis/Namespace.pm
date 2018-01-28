@@ -487,8 +487,6 @@ our %COMMANDS = (
     zscore           => [ 'first' ],
     zunionstore      => [ 'exclude_options' ],
 
-    wait_all_responses => [],
-    wait_one_response  => [],
     multi              => [],
 );
 
@@ -607,6 +605,15 @@ sub AUTOLOAD {
   goto $method;
 }
 
+# special commands. they are not redis commands.
+sub wait_one_response {
+    my $self = shift;
+    return $self->{redis}->wait_one_response(@_);
+}
+sub wait_all_responses {
+    my $self = shift;
+    return $self->{redis}->wait_all_responses(@_);
+}
 
 sub __wrap_subcb {
     my ($self, $cb) = @_;
@@ -629,6 +636,17 @@ sub __subscribe {
     my $callback = $self->__wrap_subcb($cb);
     @args = $BEFORE_FILTERS{all}->($self, @args);
     return $redis->$command(@args, $callback);
+}
+
+# PubSub commands
+sub wait_for_messages {
+    my $self = shift;
+    return $self->{redis}->wait_for_messages(@_);
+}
+
+sub is_subscriber {
+    my $self = shift;
+    return $self->{redis}->is_subscriber(@_);
 }
 
 sub subscribe {

@@ -714,7 +714,7 @@ prefix of keys.
 =item guess
 
 If Redis::Namespace doesn't known the command,
-call L<command info|http://redis.io/commands/command-info> and guess postions of keys.
+call L<command info|http://redis.io/commands/command-info> and guess positions of keys.
 It is boolean value.
 
 =back

@@ -2,6 +2,8 @@ language: perl
 services:
   - redis-server
 perl:
+  - "5.26"
+  - "5.24"
   - "5.22"
   - "5.20"
   - "5.18"
@@ -10,8 +12,8 @@ perl:
   - "5.12"
   - "5.10"
 env:
-  - REDIS_VERSION=3.2-rc1
-  - REDIS_VERSION=3.0.6
+  - REDIS_VERSION=4.0.7
+  - REDIS_VERSION=3.2.11
   - REDIS_VERSION=2.8.24
 install:
   - wget https://github.com/antirez/redis/archive/$REDIS_VERSION.tar.gz && tar xzf $REDIS_VERSION.tar.gz && make -C redis-$REDIS_VERSION

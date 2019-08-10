@@ -478,8 +478,19 @@ our %COMMANDS = (
     xadd             => [ 'first' ],
     xclaim           => [ 'first' ],
     xdel             => [ 'first' ],
-    # xgroup => [], # TODO
-    # xinfo => [], # TODO
+    xgroup => {
+        create      => [ 'first' ],
+        setid       => [ 'first' ],
+        destroy     => [ 'first' ],
+        delconsumer => [ 'first' ],
+        help        => [],
+    },
+    xinfo => {
+        consumers => [ 'first' ],
+        groups    => [ 'first' ],
+        stream    => [ 'first' ],
+        help      => [],
+    },
     xlen             => [ 'all' ],
     xpending         => [ 'first' ],
     xrange           => [ 'first' ],
@@ -541,10 +552,29 @@ sub _wrap_method {
     my $filters = $COMMANDS{$cmd};
     my $warn_message;
     my ($before, $after);
+    my @subcommand = ();
 
     if ($filters) {
-        $before = $BEFORE_FILTERS{$filters->[0] // 'none'};
-        $after = $AFTER_FILTERS{$filters->[1] // 'none'};
+        if (ref $filters eq 'HASH') {
+            # the target command has sub-commands
+            if (@extra > 0) {
+                my $subcommand = shift @extra;
+                @subcommand = ($subcommand);
+                $before = $BEFORE_FILTERS{$filters->{$subcommand}[0] // 'none'};
+                $after = $AFTER_FILTERS{$filters->{$subcommand}[1] // 'none'};
+            } else {
+                $before = sub {
+                    my ($self, $subcommand, @arg) = @_;
+                    my $before = $BEFORE_FILTERS{$filters->{$subcommand}[0] // 'none'};
+                    $after = $AFTER_FILTERS{$filters->{$subcommand}[1] // 'none'};
+                    return ($subcommand, $before->($self, @arg));
+                };
+                $after = $AFTER_FILTERS{'none'};
+            }
+        } else {
+            $before = $BEFORE_FILTERS{$filters->[0] // 'none'};
+            $after = $AFTER_FILTERS{$filters->[1] // 'none'};
+        }
     }
 
     return sub {
@@ -566,13 +596,13 @@ sub _wrap_method {
 
         if(@args && ref $args[-1] eq 'CODE') {
             my $cb = pop @args;
-            @args = $before->($self, @extra, @args);
+            @args = (@subcommand, $before->($self, @extra, @args));
             push @args, sub {
                 my ($result, $error) = @_;
                 $cb->($after->($self, $result), $error);
             };
         } else {
-            @args = $before->($self, @extra, @args);
+            @args = (@subcommand, $before->($self, @extra, @args));
         }
 
         if(!$wantarray) {

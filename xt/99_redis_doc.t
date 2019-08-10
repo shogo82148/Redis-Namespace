@@ -163,7 +163,7 @@ our %before_tests = (
 sub test_command {
     my ($key, $info) = @_;
     my ($command, @subcommand) = split / /, lc $key;
-    ok my $option = $Redis::Namespace::COMMANDS{$command}, 'exists args tranfer definition' or return;
+    ok my $option = $Redis::Namespace::COMMANDS{$command}, 'exists args transfer definition' or return;
     my ($before, $after) = @$option;
     $before //= 'none';
     ok $Redis::Namespace::BEFORE_FILTERS{$before}, "exists before filter: $before";

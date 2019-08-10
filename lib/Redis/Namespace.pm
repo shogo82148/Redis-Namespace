@@ -426,6 +426,7 @@ our %COMMANDS = (
     readwrite        => [],
     rename           => [ 'all' ],
     renamenx         => [ 'all' ],
+    replicaof        => [],
     restore          => [ 'first' ],
     role             => [],
     rpop             => [ 'first' ],

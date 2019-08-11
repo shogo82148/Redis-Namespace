@@ -14,7 +14,7 @@ my $redis = Redis->new( $redis_server->connect_info );
 my $version = $redis->info->{redis_version};
 eval { $redis->command_count } or plan skip_all => "guess option requires the COMMAND command, but your redis server seems not to support it. your redis version is $version";
 
-my $ns = Redis::Namespace->new(redis => $redis, namespace => 'ns', guess => 1);
+my $ns = Redis::Namespace->new(redis => $redis, namespace => 'ns', guess => 1, warning => 1);
 
 subtest 'get and set' => sub {
     ok($ns->set(foo => 'bar'), 'set foo => bar');

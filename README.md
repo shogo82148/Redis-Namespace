@@ -34,9 +34,16 @@ It is useful when you have multiple systems using Redis differently in your app.
 
 - guess
 
-    If Redis::Namespace doesn't known the command,
+    If `Redis::Namespace` doesn't known the command,
     call [command info](http://redis.io/commands/command-info) and guess positions of keys.
     It is boolean value.
+
+- strict
+
+    It is boolean value.
+    If it is true, `Redis::Namespace` doesn't execute unsafe commands
+    which may break another namepace and/or change the state of redis-server, such as `FLUSHALL` and `SHUTDOWN`.
+    Also, unknown commands are not executed, because there is no guarantee that the command does not break another namepace.
 
 # AUTHOR
 

@@ -35,7 +35,7 @@ subtest 'GEORADIUS' => sub {
     my $version = version->parse($redis->info->{redis_version});
     eval {
         $redis->geoadd('ns:Sicily', 13.361389, 38.115556, "Palermo", 15.087269, 37.502669, "Catania");
-    } or skip_all => "your redis server seems not to support GEO commands, your redis version is $version";
+    } or plan skip_all => "your redis server seems not to support GEO commands, your redis version is $version";
 
     is_deeply([$ns->georadius(Sicily => 15, 37, 200, "km", "ASC")], ["Catania", "Palermo"], "GEORADIUS");
 

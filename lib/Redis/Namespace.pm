@@ -227,6 +227,54 @@ our %BEFORE_FILTERS = (
         }
         return @res;
     },
+
+    # XREAD [COUNT count] [BLOCK milliseconds] STREAMS key [key ...] ID [ID ...]
+    # => XREAD [COUNT count] [BLOCK milliseconds] STREAMS namespace:key [namespace:key ...] ID [ID ...]
+    xread => sub {
+        my ($self, @args) = @_;
+        my @res;
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'count' || $option eq 'block') {
+                my $count = shift @args;
+                push @res, $option, $count;
+            } elsif ($option eq 'streams') {
+                my $num = scalar(@args) / 2;
+                push @res, $option, $self->add_namespace(@args[0..$num-1]), @args[$num..2*$num-1];
+                @args = ();
+            } else {
+                push @res, $option;
+            }
+        }
+        return @res;
+    },
+
+    # XREADGROUP GROUP group consumer [COUNT count] [BLOCK milliseconds] [NOACK] STREAMS key [key ...] ID [ID ...]
+    # => XREADGROUP GROUP group consumer [COUNT count] [BLOCK milliseconds] [NOACK] STREAMS namespace:key [namespace:key ...] ID [ID ...]
+    xreadgroup => sub {
+        my ($self, @args) = @_;
+        my @res;
+
+        # GROUP group consumer
+        push @res, splice @args, 0, 3;
+
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'count' || $option eq 'block') {
+                my $count = shift @args;
+                push @res, $option, $count;
+            } elsif ($option eq 'noack') {
+                push @res, $option;
+            } elsif ($option eq 'streams') {
+                my $num = scalar(@args) / 2;
+                push @res, $option, $self->add_namespace(@args[0..$num-1]), @args[$num..2*$num-1];
+                @args = ();
+            } else {
+                push @res, $option;
+            }
+        }
+        return @res;
+    },
 );
 
 our %AFTER_FILTERS = (
@@ -252,7 +300,20 @@ our %AFTER_FILTERS = (
         my ($self, $iter, $list) = @_;
         my @keys = map { $self->rem_namespace($_) } @$list;
         return ($iter, \@keys);
-    }
+    },
+
+    # [ [ namespace:key1, [...] ], [ namespace:key2, [...] ] => [ [ key1, [...] ], [ key2, [...] ]
+    xread => sub {
+        my ($self, @args) = @_;
+        return map {
+            if ($_) {
+                my ($key, @rest) = @$_;
+                [$self->rem_namespace($key), @rest];
+            } else {
+                $_;
+            }
+        } @args;
+    },
 );
 
 sub add_namespace {
@@ -324,8 +385,10 @@ our %COMMANDS = (
     bitpos           => [ 'first' ],
     bitop            => [ 'exclude_first' ],
     blpop            => [ 'exclude_last', 'first' ],
-    brpop            => [ 'exclude_last' ],
+    brpop            => [ 'exclude_last', 'first' ],
     brpoplpush       => [ 'exclude_last' ],
+    bzpopmax         => [ 'exclude_last', 'first' ],
+    bzpopmin         => [ 'exclude_last', 'first' ],
     client           => [],
     cluster          => [],
     command          => [],
@@ -392,6 +455,12 @@ our %COMMANDS = (
     mapped_mget      => [ 'all', 'all' ],
     mapped_mset      => [ 'all' ],
     mapped_msetnx    => [ 'all' ],
+    memory_doctor    => [],
+    memory_help      => [],
+    'memory_malloc-stas' => [],
+    memory_purge     => [],
+    memory_stats     => [],
+    memory_usage     => [],
     mget             => [ 'all' ],
     migrate          => [ 'migrate' ],
     monitor          => [],
@@ -418,6 +487,7 @@ our %COMMANDS = (
     readwrite        => [],
     rename           => [ 'all' ],
     renamenx         => [ 'all' ],
+    replicaof        => [],
     restore          => [ 'first' ],
     role             => [],
     rpop             => [ 'first' ],
@@ -465,12 +535,38 @@ our %COMMANDS = (
     unwatch          => [],
     wait             => [],
     watch            => [ 'all' ],
+    xack             => [ 'first' ],
+    xadd             => [ 'first' ],
+    xclaim           => [ 'first' ],
+    xdel             => [ 'first' ],
+    xgroup => {
+        create      => [ 'first' ],
+        setid       => [ 'first' ],
+        destroy     => [ 'first' ],
+        delconsumer => [ 'first' ],
+        help        => [],
+    },
+    xinfo => {
+        consumers => [ 'first' ],
+        groups    => [ 'first' ],
+        stream    => [ 'first' ],
+        help      => [],
+    },
+    xlen             => [ 'all' ],
+    xpending         => [ 'first' ],
+    xrange           => [ 'first' ],
+    xread            => [ 'xread', 'xread' ],
+    xreadgroup       => [ 'xreadgroup', 'xread' ],
+    xrevrange        => [ 'first' ],
+    xtrim            => [ 'first' ],
     zadd             => [ 'first' ],
     zcard            => [ 'first' ],
     zcount           => [ 'first' ],
     zincrby          => [ 'first' ],
     zinterstore      => [ 'exclude_options' ],
     zlexcount        => [ 'first' ],
+    zpopmax          => [ 'first' ],
+    zpopmin          => [ 'first' ],
     zrange           => [ 'first' ],
     zrangebylex      => [ 'first' ],
     zrangebyscore    => [ 'first' ],
@@ -517,10 +613,29 @@ sub _wrap_method {
     my $filters = $COMMANDS{$cmd};
     my $warn_message;
     my ($before, $after);
+    my @subcommand = ();
 
     if ($filters) {
-        $before = $BEFORE_FILTERS{$filters->[0] // 'none'};
-        $after = $AFTER_FILTERS{$filters->[1] // 'none'};
+        if (ref $filters eq 'HASH') {
+            # the target command has sub-commands
+            if (@extra > 0) {
+                my $subcommand = shift @extra;
+                @subcommand = ($subcommand);
+                $before = $BEFORE_FILTERS{$filters->{$subcommand}[0] // 'none'};
+                $after = $AFTER_FILTERS{$filters->{$subcommand}[1] // 'none'};
+            } else {
+                $before = sub {
+                    my ($self, $subcommand, @arg) = @_;
+                    my $before = $BEFORE_FILTERS{$filters->{$subcommand}[0] // 'none'};
+                    $after = $AFTER_FILTERS{$filters->{$subcommand}[1] // 'none'};
+                    return ($subcommand, $before->($self, @arg));
+                };
+                $after = $AFTER_FILTERS{'none'};
+            }
+        } else {
+            $before = $BEFORE_FILTERS{$filters->[0] // 'none'};
+            $after = $AFTER_FILTERS{$filters->[1] // 'none'};
+        }
     }
 
     return sub {
@@ -542,13 +657,13 @@ sub _wrap_method {
 
         if(@args && ref $args[-1] eq 'CODE') {
             my $cb = pop @args;
-            @args = $before->($self, @extra, @args);
+            @args = (@subcommand, $before->($self, @extra, @args));
             push @args, sub {
                 my ($result, $error) = @_;
                 $cb->($after->($self, $result), $error);
             };
         } else {
-            @args = $before->($self, @extra, @args);
+            @args = (@subcommand, $before->($self, @extra, @args));
         }
 
         if(!$wantarray) {

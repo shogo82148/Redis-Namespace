@@ -11,15 +11,25 @@ our %custom_test = (
         my $args = $info->{arguments};
         is $args->[0]{type}, 'string';
     },
+
+    # pub-sub commands
     PSUBSCRIBE => sub { pass },
     PUBLISH => sub { pass },
     PUBSUB => sub { pass },
     SUBSCRIBE => sub { pass },
     UNSUBSCRIBE => sub { pass },
+
+    # special sub-commands
     'SCRIPT EXISTS' => sub { pass },
     'SCRIPT FLUSH' => sub { pass },
     'SCRIPT KILL' => sub { pass },
     'SCRIPT LOAD' => sub { pass },
+    'MEMORY DOCTOR' => sub { pass },
+    'MEMORY HELP' => sub { pass },
+    'MEMORY MALLOC-STATS' => sub { pass },
+    'MEMORY PURGE' => sub { pass },
+    'MEMORY STATS' => sub { pass },
+    'MEMORY USAGE' => sub { pass },
 );
 
 sub test {
@@ -163,7 +173,7 @@ our %before_tests = (
 sub test_command {
     my ($key, $info) = @_;
     my ($command, @subcommand) = split / /, lc $key;
-    ok my $option = $Redis::Namespace::COMMANDS{$command}, 'exists args tranfer definition' or return;
+    ok my $option = $Redis::Namespace::COMMANDS{$command}, 'exists args transfer definition' or return;
     my ($before, $after) = @$option;
     $before //= 'none';
     ok $Redis::Namespace::BEFORE_FILTERS{$before}, "exists before filter: $before";

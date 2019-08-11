@@ -1,6 +1,4 @@
 language: perl
-services:
-  - redis-server
 perl:
   - "5.30"
   - "5.28"
@@ -13,16 +11,22 @@ perl:
   - "5.14"
   - "5.12"
   - "5.10"
+dist: bionic
 env:
   - REDIS_VERSION=5.0.5
   - REDIS_VERSION=4.0.14
   - REDIS_VERSION=3.2.13
   - REDIS_VERSION=2.8.24
+cache:
+  directories:
+  - redis-$REDIS_VERSION
 install:
-  - wget https://github.com/antirez/redis/archive/$REDIS_VERSION.tar.gz && tar xzf $REDIS_VERSION.tar.gz && make -C redis-$REDIS_VERSION
-  - cpanm --quiet --installdeps --notest .
+  - test -e redis-$REDIS_VERSION/src/redis-server || ( wget https://github.com/antirez/redis/archive/$REDIS_VERSION.tar.gz && tar xzf $REDIS_VERSION.tar.gz && make -C redis-$REDIS_VERSION )
+  - cpanm -L extlib --quiet --installdeps --notest .
 script:
-  - PATH=$PWD/redis-$REDIS_VERSION/src:$PATH redis-server --version
+  - export PATH=$PWD/redis-$REDIS_VERSION/src:$PATH
+  - export PERL5LIB=$PWD/extlib/lib/perl5:$PERL5LIB
+  - redis-server --version
   - perl Build.PL
-  - PATH=$PWD/redis-$REDIS_VERSION/src:$PATH prove -lv t
+  - prove -lv t
 sudo: false

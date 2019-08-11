@@ -596,14 +596,15 @@ sub new {
     $self->{warning} = $args{warning};
     $self->{subscribers} = {};
     if ($args{guess}) {
-        my $version = $self->{redis}->info->{redis_version};
-        my ($major, $minor, $rev) = split /\./, $version;
-        if ( $major >= 3 || $major == 2 && $minor >= 8 && $rev >= 13 ) {
+        my $count = eval { $self->{redis}->command_count };
+        if ($count) {
             $self->{guess} = 1;
         } elsif ($self->{warning}) {
+            my $version = $self->{redis}->info->{redis_version};
             warn "guess option requires 2.8.13 or later. your redis version is $version";
         }
     }
+    $self->{guess_cache} = {};
     return $self;
 }
 

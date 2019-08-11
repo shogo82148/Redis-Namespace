@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '0.09';
 
 use Redis;
+use Carp qw(carp croak);
 
 our %BEFORE_FILTERS = (
     # do nothing
@@ -375,6 +376,20 @@ sub rem_namespace {
     return @result;
 }
 
+# %UNSAFE_COMMANDS may break other namepace and/or change the state of redis-server.
+# these commands are disable in strict mode.
+our %UNSAFE_COMMANDS = {
+    cluster   => 1,
+    config    => 1,
+    flushall  => 1,
+    flushdb   => 1,
+    readonly  => 1,
+    readwrite => 1,
+    replicaof => 1,
+    slaveof   => 1,
+    shutdown  => 1,
+};
+
 our %COMMANDS = (
     append           => [ 'first' ],
     auth             => [],
@@ -450,17 +465,7 @@ our %COMMANDS = (
     lrem             => [ 'first' ],
     lset             => [ 'first' ],
     ltrim            => [ 'first' ],
-    mapped_hmset     => [ 'first' ],
-    mapped_hmget     => [ 'first' ],
-    mapped_mget      => [ 'all', 'all' ],
-    mapped_mset      => [ 'all' ],
-    mapped_msetnx    => [ 'all' ],
-    memory_doctor    => [],
-    memory_help      => [],
-    'memory_malloc-stas' => [],
-    memory_purge     => [],
-    memory_stats     => [],
-    memory_usage     => [],
+    memory           => [],
     mget             => [ 'all' ],
     migrate          => [ 'migrate' ],
     monitor          => [],
@@ -594,6 +599,7 @@ sub new {
     $self->{redis} = $args{redis} || Redis->new(%args);
     $self->{namespace} = $args{namespace};
     $self->{warning} = $args{warning};
+    $self->{strict} = $args{strict};
     $self->{subscribers} = {};
     if ($args{guess}) {
         my $count = eval { $self->{redis}->command_count };
@@ -601,7 +607,7 @@ sub new {
             $self->{guess} = 1;
         } elsif ($self->{warning}) {
             my $version = $self->{redis}->info->{redis_version};
-            warn "guess option requires 2.8.13 or later. your redis version is $version";
+            carp "guess option requires 2.8.13 or later. your redis version is $version";
         }
     }
     $self->{guess_cache} = {};
@@ -645,7 +651,14 @@ sub _wrap_method {
         my $wantarray = wantarray;
         my ($before, $after) = ($before, $after);
 
+        if ($self->{strict} && $UNSAFE_COMMANDS{$command}) {
+            croak "unsafe command '$command'";
+        }
+
         if (!$before || !$after) {
+            if ($self->{strict}) {
+                croak "unknown command '$command'";
+            }
             ($before, $after) = $self->_guess($command, @subcommand, @extra, @args);
         }
 
@@ -675,7 +688,7 @@ sub _wrap_method {
 sub _guess {
     my ($self, $command, @args) = @_;
     if (!$self->{guess}) {
-        warn "Unknown command. Passing '$command' to the redis server as is.";
+        carp "unknown command '$command'. passing arguments to the redis server as is.";
         return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none};
     }
 
@@ -693,7 +706,7 @@ sub _guess {
 
     unless ($name) {
         if ($self->{warning}) {
-            warn "Unknown command. Passing '$command' to the redis server as is.";
+            carp "unknown command '$command'. passing arguments to the redis server as is.";
         }
         my ($before, $after) = ($BEFORE_FILTERS{none}, $AFTER_FILTERS{none});
         $self->{guess_cache}{$command} = [$before, $after];
@@ -749,7 +762,7 @@ sub _guess_movablekeys {
     $search->(0, 0);
 
     if (@list == 0) {
-        die "fail to guess key positions";
+        croak "fail to guess key positions of command '$command'";
     } elsif (@list == 1) {
         # found keys
         my $positions = $list[0];
@@ -788,7 +801,7 @@ LOOP:
         }, $AFTER_FILTERS{none}
     }
 
-    die "fail to guess key positions";
+    croak "fail to guess key positions of command '$command'";
 }
 
 sub DESTROY { }
@@ -831,7 +844,7 @@ sub __wrap_subcb {
 sub __subscribe {
     my ($self, $command, @args) = @_;
     my $cb = pop @args;
-    confess("Missing required callback in call to $command(), ")
+    confess("missing required callback in call to $command(), ")
         unless ref($cb) eq 'CODE';
 
     my $redis = $self->{redis};

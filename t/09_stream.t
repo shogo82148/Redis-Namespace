@@ -93,4 +93,46 @@ subtest 'shorthands for xgroup and xinfo' => sub {
     ok $ns->xgroup_destroy('mystream', 'consumer-group-name'), 'xgroup_destroy';
 };
 
+subtest 'xread' => sub {
+    ok $id1 = $ns->xadd('stream-a', '*', name => 'a');
+    ok $id2 = $ns->xadd('stream-b', '*', name => 'b');
+    is_deeply [$ns->xread(COUNT => 2, STREAMS => 'stream-a', 'stream-b', '0', '0')], [
+        [
+            'stream-a',
+            [
+                [ $id1, [ name => 'a' ] ],
+            ],
+        ],
+        [
+            'stream-b',
+            [
+                [ $id2, [ name => 'b' ] ],
+            ],
+        ],
+    ];
+    $ns->del('stream-a', 'stream-b');
+};
+
+subtest 'xreadgroup' => sub {
+    ok $ns->xgroup_create('stream-a', 'consumer-group-name', '0', 'MKSTREAM'), 'xgroup create';
+    ok $ns->xgroup_create('stream-b', 'consumer-group-name', '0', 'MKSTREAM'), 'xgroup create';
+    ok $id1 = $ns->xadd('stream-a', '*', name => 'a');
+    ok $id2 = $ns->xadd('stream-b', '*', name => 'b');
+    is_deeply [$ns->xreadgroup(GROUP => 'consumer-group-name', 'foobar', COUNT => 2, 'NOACK', STREAMS => 'stream-a', 'stream-b', '>', '>')], [
+        [
+            'stream-a',
+            [
+                [ $id1, [ name => 'a' ] ],
+            ],
+        ],
+        [
+            'stream-b',
+            [
+                [ $id2, [ name => 'b' ] ],
+            ],
+        ],
+    ];
+    $ns->del('stream-a', 'stream-b');
+};
+
 done_testing;

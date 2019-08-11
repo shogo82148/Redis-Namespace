@@ -227,6 +227,54 @@ our %BEFORE_FILTERS = (
         }
         return @res;
     },
+
+    # XREAD [COUNT count] [BLOCK milliseconds] STREAMS key [key ...] ID [ID ...]
+    # => XREAD [COUNT count] [BLOCK milliseconds] STREAMS namespace:key [namespace:key ...] ID [ID ...]
+    xread => sub {
+        my ($self, @args) = @_;
+        my @res;
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'count' || $option eq 'block') {
+                my $count = shift @args;
+                push @res, $option, $count;
+            } elsif ($option eq 'streams') {
+                my $num = scalar(@args) / 2;
+                push @res, $option, $self->add_namespace(@args[0..$num-1]), @args[$num..2*$num-1];
+                @args = ();
+            } else {
+                push @res, $option;
+            }
+        }
+        return @res;
+    },
+
+    # XREADGROUP GROUP group consumer [COUNT count] [BLOCK milliseconds] [NOACK] STREAMS key [key ...] ID [ID ...]
+    # => XREADGROUP GROUP group consumer [COUNT count] [BLOCK milliseconds] [NOACK] STREAMS namespace:key [namespace:key ...] ID [ID ...]
+    xreadgroup => sub {
+        my ($self, @args) = @_;
+        my @res;
+
+        # GROUP group consumer
+        push @res, splice @args, 0, 3;
+
+        while(@args) {
+            my $option = lc shift @args;
+            if($option eq 'count' || $option eq 'block') {
+                my $count = shift @args;
+                push @res, $option, $count;
+            } elsif ($option eq 'noack') {
+                push @res, $option;
+            } elsif ($option eq 'streams') {
+                my $num = scalar(@args) / 2;
+                push @res, $option, $self->add_namespace(@args[0..$num-1]), @args[$num..2*$num-1];
+                @args = ();
+            } else {
+                push @res, $option;
+            }
+        }
+        return @res;
+    },
 );
 
 our %AFTER_FILTERS = (
@@ -252,7 +300,20 @@ our %AFTER_FILTERS = (
         my ($self, $iter, $list) = @_;
         my @keys = map { $self->rem_namespace($_) } @$list;
         return ($iter, \@keys);
-    }
+    },
+
+    # [ [ namespace:key1, [...] ], [ namespace:key2, [...] ] => [ [ key1, [...] ], [ key2, [...] ]
+    xread => sub {
+        my ($self, @args) = @_;
+        return map {
+            if ($_) {
+                my ($key, @rest) = @$_;
+                [$self->rem_namespace($key), @rest];
+            } else {
+                $_;
+            }
+        } @args;
+    },
 );
 
 sub add_namespace {
@@ -494,8 +555,8 @@ our %COMMANDS = (
     xlen             => [ 'all' ],
     xpending         => [ 'first' ],
     xrange           => [ 'first' ],
-    # xread => [], # TODO
-    # xreadgroup => [], # TODO
+    xread            => [ 'xread', 'xread' ],
+    xreadgroup       => [ 'xreadgroup', 'xread' ],
     xrevrange        => [ 'first' ],
     xtrim            => [ 'first' ],
     zadd             => [ 'first' ],

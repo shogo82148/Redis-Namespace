@@ -378,7 +378,7 @@ sub rem_namespace {
 
 # %UNSAFE_COMMANDS may break other namepace and/or change the state of redis-server.
 # these commands are disable in strict mode.
-our %UNSAFE_COMMANDS = {
+our %UNSAFE_COMMANDS = (
     cluster   => 1,
     config    => 1,
     flushall  => 1,
@@ -388,7 +388,7 @@ our %UNSAFE_COMMANDS = {
     replicaof => 1,
     slaveof   => 1,
     shutdown  => 1,
-};
+);
 
 our %COMMANDS = (
     append           => [ 'first' ],
@@ -928,9 +928,16 @@ prefix of keys.
 
 =item guess
 
-If Redis::Namespace doesn't known the command,
+If C<Redis::Namespace> doesn't known the command,
 call L<command info|http://redis.io/commands/command-info> and guess positions of keys.
 It is boolean value.
+
+=item strict
+
+It is boolean value.
+If it is true, C<Redis::Namespace> doesn't execute unsafe commands
+which may break another namepace and/or change the state of redis-server, such as C<FLUSHALL> and C<SHUTDOWN>.
+Also, unknown commands are not executed, because there is no guarantee that the command does not break another namepace.
 
 =back
 

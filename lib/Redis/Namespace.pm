@@ -613,7 +613,6 @@ sub _wrap_method {
     my ($class, $command) = @_;
     my ($cmd, @extra) = split /_/, lc($command);
     my $filters = $COMMANDS{$cmd};
-    my $warn_message;
     my ($before, $after);
     my @subcommand = ();
 
@@ -675,6 +674,11 @@ sub _wrap_method {
 
 sub _guess {
     my ($self, $command, @args) = @_;
+    if (!$self->{guess}) {
+        warn "Unknown command. Passing '$command' to the redis server as is.";
+        return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none};
+    }
+
     if (my $cache = $self->{guess_cache}{$command}) {
         return @$cache;
     }
@@ -685,7 +689,7 @@ sub _guess {
     }
 
     my $info = $self->{redis}->command_info($command);
-    my ($name, $num, $flags, $first, $last, $step) = @{$info->[0]};
+    my ($name, $num, $flags, $first, $last, $step) = @{$info->[0] || []};
 
     unless ($name) {
         if ($self->{warning}) {

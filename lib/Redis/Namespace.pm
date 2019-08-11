@@ -605,6 +605,7 @@ sub new {
         }
     }
     $self->{guess_cache} = {};
+    $self->{movablekeys} = {};
     return $self;
 }
 
@@ -643,18 +644,11 @@ sub _wrap_method {
         my ($self, @args) = @_;
         my $redis = $self->{redis};
         my $wantarray = wantarray;
+        my ($before, $after) = ($before, $after);
 
         if (!$before || !$after) {
-            if ($self->{guess}) {
-                ($before, $after, $warn_message) = $self->_guess($command);
-            } else {
-                $warn_message = "Passing '$command' to redis as is.";
-                $before = $BEFORE_FILTERS{none};
-                $after = $AFTER_FILTERS{none};
-            }
+            ($before, $after) = $self->_guess($command, @subcommand, @extra, @args);
         }
-
-        warn $warn_message if $warn_message && $self->{warning};
 
         if(@args && ref $args[-1] eq 'CODE') {
             my $cb = pop @args;
@@ -680,17 +674,32 @@ sub _wrap_method {
 }
 
 sub _guess {
-    my ($self, $command) = @_;
-    my $info = $self->{redis}->command('info', $command);
-    my ($name, $num, $flags, $first, $last, $step) = @{$info->[0]};
-    my ($movablekeys) = grep { $_ eq 'movablekeys' } @{$flags || []};
-
-    unless ($name) {
-        return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none}, "Unknown command. Passing '$command' to redis as is.";
+    my ($self, $command, @args) = @_;
+    if (my $cache = $self->{guess_cache}{$command}) {
+        return @$cache;
     }
 
+    my $movablekeys = $self->{movablekeys}{$command};
     if ($movablekeys) {
-        return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none}, "movablekeys command. Passing '$command' to redis as is.";
+        return $self->_guess_movablekeys($command, @args);
+    }
+
+    my $info = $self->{redis}->command_info($command);
+    my ($name, $num, $flags, $first, $last, $step) = @{$info->[0]};
+
+    unless ($name) {
+        if ($self->{warning}) {
+            warn "Unknown command. Passing '$command' to the redis server as is.";
+        }
+        my ($before, $after) = ($BEFORE_FILTERS{none}, $AFTER_FILTERS{none});
+        $self->{guess_cache}{$command} = [$before, $after];
+        return $before, $after;
+    }
+
+    ($movablekeys) = grep { $_ eq 'movablekeys' } @{$flags || []};
+    if ($movablekeys) {
+        $self->{movablekeys}{$command} = 1;
+        return $self->_guess_movablekeys($command, @args);
     }
 
     my $before = sub {
@@ -702,7 +711,80 @@ sub _guess {
         }
         return @args;
     };
-    return $before, $AFTER_FILTERS{none};
+    my $after = $AFTER_FILTERS{none};
+    $self->{guess_cache}{$command} = [$before, $after];
+    return $before, $after;
+}
+
+sub _guess_movablekeys {
+    my ($self, $command, @args) = @_;
+    if(@args && ref $args[-1] eq 'CODE') {
+        pop @args; # ignore callback function
+    }
+
+    my @keys = eval { $self->{redis}->command_getkeys($command, @args) }
+        or return $BEFORE_FILTERS{none}, $AFTER_FILTERS{none};
+    my @positions = ();
+    my @list = ();
+
+    # search the positions of keys.
+    my $search; $search = sub {
+        my ($i, $start) = @_;
+        my $key = $keys[$i];
+        for (my $j = $start; $j < @args; $j++) {
+            next if $args[$j] ne $key;
+            push @positions, $j;
+            if ($i+1 < @keys) {
+                $search->($i+1, $j+1);
+            } else {
+                push @list, [@positions];
+            }
+            pop @positions;
+        }
+    };
+    $search->(0, 0);
+
+    if (@list == 0) {
+        die "fail to guess key positions";
+    } elsif (@list == 1) {
+        # found keys
+        my $positions = $list[0];
+        return sub {
+            my ($self, @args) = @_;
+            @args[@$positions] = $self->add_namespace(@args[@$positions]);
+            return @args;
+        }, $AFTER_FILTERS{none}
+    }
+
+    # found keys, but their positions are ambiguous
+    my $prefix = "test-key-$^T-$$-";
+    my @want = map { "$prefix$_" } @keys;
+LOOP:
+    for my $positions(@list) {
+        my @args = @args;
+        for my $i(@$positions) {
+            $args[$i] = $prefix . $args[$i];
+        }
+        my @keys = eval { $self->{redis}->command_getkeys($command, @args) };
+
+        if (scalar(@keys) != scalar(@want)) {
+            next;
+        }
+        for my $i(0..scalar(@keys)-1) {
+            if ($keys[$i] ne $want[$i]) {
+                next LOOP
+            }
+        }
+
+        # found!
+        return sub {
+            my ($self, @args) = @_;
+            @args[@$positions] = $self->add_namespace(@args[@$positions]);
+            return @args;
+        }, $AFTER_FILTERS{none}
+    }
+
+    die "fail to guess key positions";
 }
 
 sub DESTROY { }

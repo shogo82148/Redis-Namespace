@@ -50,4 +50,35 @@ subtest 'GEORADIUS' => sub {
     $redis->flushall;
 };
 
+subtest 'ambiguous' => sub {
+    # check the redis server supports stream commands
+    eval { $redis->command_count } or plan skip_all => 'redis-server does not support the COMMAND command';
+    $redis->command_info('xgroup')->[0] or plan skip_all => 'redis-server does not support the stream commands';
+
+    ok my $id1 = $ns->xadd('count', '*', name => 'a');
+    ok my $id2 = $ns->xadd('block', '*', name => 'b');
+    ok my $id3 = $ns->xadd('streams', '*', name => 'c');
+    is_deeply [$ns->xread(count => 2, block => 1000, streams => 'count', 'block', 'streams', '0', '0', '0')], [
+        [
+            # XXX: we can't remove the prefix, because the COMMAND command does not provide the key positions of the output.
+            'ns:count',
+            [
+                [ $id1, [ name => 'a' ] ],
+            ],
+        ],
+        [
+            'ns:block',
+            [
+                [ $id2, [ name => 'b' ] ],
+            ],
+        ],
+        [
+            'ns:streams',
+            [
+                [ $id3, [ name => 'c' ] ],
+            ],
+        ],
+    ];
+};
+
 done_testing;

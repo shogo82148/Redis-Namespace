@@ -23,9 +23,11 @@ cache:
   - redis-$REDIS_VERSION
 install:
   - test -e redis-$REDIS_VERSION/src/redis-server || ( wget https://github.com/antirez/redis/archive/$REDIS_VERSION.tar.gz && tar xzf $REDIS_VERSION.tar.gz && make -C redis-$REDIS_VERSION )
-  - cpanm --quiet --installdeps --notest .
+  - cpanm -L extlib --quiet --installdeps --notest .
 script:
-  - PATH=$PWD/redis-$REDIS_VERSION/src:$PATH redis-server --version
+  - export PATH=$PWD/redis-$REDIS_VERSION/src:$PATH
+  - export PERL5LIB=$PWD/extlib/lib/perl5:$PERL5LIB
+  - redis-server --version
   - perl Build.PL
-  - PATH=$PWD/redis-$REDIS_VERSION/src:$PATH prove -lv t
+  - prove -lv t
 sudo: false

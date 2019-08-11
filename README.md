@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/shogo82148/Redis-Namespace.svg?branch=master)](https://travis-ci.org/shogo82148/Redis-Namespace) [![MetaCPAN Release](https://badge.fury.io/pl/Redis-Namespace.svg)](https://metacpan.org/release/Redis-Namespace)
 # NAME
 
 Redis::Namespace - a wrapper of Redis.pm that namespaces all Redis calls

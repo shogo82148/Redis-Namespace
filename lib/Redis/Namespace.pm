@@ -124,6 +124,8 @@ our %BEFORE_FILTERS = (
         my ($self, @args) = @_;
         my @res;
 
+        my $namespace = $self->{namespace_escaped};
+
         # first arg is iteration key
         if(@args) {
             my $first = shift @args;
@@ -136,7 +138,7 @@ our %BEFORE_FILTERS = (
             my $option = lc shift @args;
             if($option eq 'match') {
                 my $pattern = shift @args;
-                push @res, $option, $self->add_namespace($pattern);
+                push @res, $option, "$namespace:$pattern";
                 $has_pattern = 1;
             } elsif($option eq 'count') {
                 my $count = shift @args;
@@ -148,7 +150,7 @@ our %BEFORE_FILTERS = (
 
         # add pattern option
         unless($has_pattern) {
-            push @res, 'match', $self->add_namespace('*');
+            push @res, 'match', "$namespace:*";
         }
 
         return @res;

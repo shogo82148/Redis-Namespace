@@ -72,6 +72,13 @@ our %BEFORE_FILTERS = (
         return @result;
     },
 
+    keys => sub {
+        my ($self, $pattern) = @_;
+        return unless defined $pattern;
+        my $namespace = $self->{namespace_escaped};
+        return "$namespace:$pattern";
+    },
+
     sort => sub {
         my ($self, @args) = @_;
         my @res;
@@ -118,6 +125,8 @@ our %BEFORE_FILTERS = (
         my ($self, @args) = @_;
         my @res;
 
+        my $namespace = $self->{namespace_escaped};
+
         # first arg is iteration key
         if(@args) {
             my $first = shift @args;
@@ -130,7 +139,7 @@ our %BEFORE_FILTERS = (
             my $option = lc shift @args;
             if($option eq 'match') {
                 my $pattern = shift @args;
-                push @res, $option, $self->add_namespace($pattern);
+                push @res, $option, "$namespace:$pattern";
                 $has_pattern = 1;
             } elsif($option eq 'count') {
                 my $count = shift @args;
@@ -142,7 +151,7 @@ our %BEFORE_FILTERS = (
 
         # add pattern option
         unless($has_pattern) {
-            push @res, 'match', $self->add_namespace('*');
+            push @res, 'match', "$namespace:*";
         }
 
         return @res;
@@ -453,7 +462,7 @@ our %COMMANDS = (
     incrby           => [ 'first' ],
     incrbyfloat      => [ 'first' ],
     info             => [],
-    keys             => [ 'first', 'all' ],
+    keys             => [ 'keys', 'all' ],
     lastsave         => [],
     lindex           => [ 'first' ],
     linsert          => [ 'first' ],
@@ -612,6 +621,12 @@ sub new {
     }
     $self->{guess_cache} = {};
     $self->{movablekeys} = {};
+
+    # escape for pattern
+    my $escaped = $args{namespace};
+    $escaped =~ s/([[?*\\])/"\\$1"/ge;
+    $self->{namespace_escaped} = $escaped;
+
     return $self;
 }
 

@@ -14,6 +14,7 @@ our %custom_test = (
 
     # pub-sub commands
     PSUBSCRIBE => sub { pass },
+    PUNSUBSCRIBE => sub { pass },
     PUBLISH => sub { pass },
     PUBSUB => sub { pass },
     SUBSCRIBE => sub { pass },
@@ -55,14 +56,14 @@ our %before_tests = (
     },
     first => sub {
         my ($first, @extra) = @_;
-        ok $first->{type} eq 'key' || $first->{type} eq 'pattern', $first->{name};
+        is $first->{type}, 'key', $first->{name};
         for my $arg (@extra) {
             isnt $arg->{type}, 'key', $arg->{name};
         }
     },
     all => sub {
         for my $arg (@_) {
-            ok $arg->{type} eq 'key' || $arg->{type} eq 'pattern', $arg->{name};
+            ok $arg->{type} eq 'key', $arg->{name};
         }
     },
     exclude_first => sub {
@@ -85,6 +86,11 @@ our %before_tests = (
             isnt $arg->{type}[1], 'key', $arg->{name}[1];
             is scalar @{$arg->{name}}, 2;
         }
+    },
+    keys => sub {
+        my ($pattern, @extra) = @_;
+        is $pattern->{type}, 'pattern', $pattern->{name};
+        ok !@extra;
     },
     sort => sub {
         my ($first, @extra) = @_;

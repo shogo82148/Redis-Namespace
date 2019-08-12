@@ -868,6 +868,19 @@ sub __subscribe {
     return $redis->$command(@args, $callback);
 }
 
+sub __psubscribe {
+    my ($self, $command, @args) = @_;
+    my $cb = pop @args;
+    confess("missing required callback in call to $command(), ")
+        unless ref($cb) eq 'CODE';
+
+    my $redis = $self->{redis};
+    my $callback = $self->__wrap_subcb($cb);
+    my $namespace = $self->{namespace_escaped};
+    @args = map { "$namespace:$_" } @args;
+    return $redis->$command(@args, $callback);
+}
+
 # PubSub commands
 sub wait_for_messages {
     my $self = shift;
@@ -886,7 +899,7 @@ sub subscribe {
 
 sub psubscribe {
     my $self = shift;
-    return $self->__subscribe('psubscribe', @_);
+    return $self->__psubscribe('psubscribe', @_);
 }
 
 sub unsubscribe {
@@ -896,7 +909,7 @@ sub unsubscribe {
 
 sub punsubscribe {
     my $self = shift;
-    return $self->__subscribe('punsubscribe', @_);
+    return $self->__psubscribe('punsubscribe', @_);
 }
 
 1;

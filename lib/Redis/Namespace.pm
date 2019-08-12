@@ -74,6 +74,7 @@ our %BEFORE_FILTERS = (
 
     keys => sub {
         my ($self, $pattern) = @_;
+        return unless defined $pattern;
         my $namespace = $self->{namespace_escaped};
         return "$namespace:$pattern";
     },

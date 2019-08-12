@@ -72,6 +72,12 @@ our %BEFORE_FILTERS = (
         return @result;
     },
 
+    keys => sub {
+        my ($self, $pattern) = @_;
+        my $namespace = $self->{namespace_escaped};
+        return "$namespace:$pattern";
+    },
+
     sort => sub {
         my ($self, @args) = @_;
         my @res;
@@ -453,7 +459,7 @@ our %COMMANDS = (
     incrby           => [ 'first' ],
     incrbyfloat      => [ 'first' ],
     info             => [],
-    keys             => [ 'first', 'all' ],
+    keys             => [ 'keys', 'all' ],
     lastsave         => [],
     lindex           => [ 'first' ],
     linsert          => [ 'first' ],
@@ -612,6 +618,12 @@ sub new {
     }
     $self->{guess_cache} = {};
     $self->{movablekeys} = {};
+
+    # escape for pattern
+    my $escaped = $args{namespace};
+    $escaped =~ s/([[?*\\])/"\\$1"/ge;
+    $self->{namespace_escaped} = $escaped;
+
     return $self;
 }
 

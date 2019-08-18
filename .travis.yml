@@ -5,13 +5,7 @@ perl:
   - "5.26"
   - "5.24"
   - "5.22"
-  - "5.20"
-  - "5.18"
-  - "5.16"
-  - "5.14"
-  - "5.12"
-  - "5.10"
-dist: bionic
+dist: xenial
 env:
   - REDIS_VERSION=5.0.5
   - REDIS_VERSION=4.0.14
@@ -30,4 +24,3 @@ script:
   - redis-server --version
   - perl Build.PL
   - prove -lv t
-sudo: false

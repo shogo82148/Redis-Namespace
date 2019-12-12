@@ -468,6 +468,7 @@ our %COMMANDS = (
     lindex           => [ 'first' ],
     linsert          => [ 'first' ],
     llen             => [ 'first' ],
+    lolwut           => [],
     lpop             => [ 'first' ],
     lpush            => [ 'first' ],
     lpushx           => [ 'first' ],

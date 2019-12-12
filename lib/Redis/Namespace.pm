@@ -464,6 +464,7 @@ our %COMMANDS = (
     info             => [],
     keys             => [ 'keys', 'all' ],
     lastsave         => [],
+    latency          => [],
     lindex           => [ 'first' ],
     linsert          => [ 'first' ],
     llen             => [ 'first' ],

@@ -499,6 +499,7 @@ our %COMMANDS = (
     ping             => [],
     psetex           => [ 'first' ],
     psubscribe       => [ 'all' ],
+    psync            => [],
     pttl             => [ 'first' ],
     publish          => [ 'first' ],
     punsubscribe     => [ 'all' ],

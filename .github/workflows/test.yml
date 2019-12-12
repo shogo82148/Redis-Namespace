@@ -107,6 +107,8 @@ jobs:
         with:
           perl-version: "5"
       - name: Install
-        run: cpanm --quiet --with-develop --installdeps --notest .
+        run: |
+          cpanm --quiet --with-develop --installdeps --notest .
+          cpanm --quiet Test::Perl::Critic
       - run: perl Build.PL
       - run: prove -lv xt

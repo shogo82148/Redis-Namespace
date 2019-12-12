@@ -478,6 +478,11 @@ our %COMMANDS = (
     memory           => [],
     mget             => [ 'all' ],
     migrate          => [ 'migrate' ],
+    module => {
+        list   => [],
+        load   => [],
+        unload => [],
+    },
     monitor          => [],
     move             => [ 'first' ],
     mscan            => [ 'first' ],

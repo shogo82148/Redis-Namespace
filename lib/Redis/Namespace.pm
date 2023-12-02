@@ -843,6 +843,26 @@ sub AUTOLOAD {
   goto $method;
 }
 
+# more convenient scan interface
+
+sub scan_callback {
+    my ($self, @args) = @_;
+    my $callback = pop @args;
+
+    croak "last argument to scan_callback must be a callback"
+        unless ref $callback eq 'CODE';
+    croak "arguments to scan_callback must be a hash, not odd-sized array"
+        if @args % 2;
+
+    my $iter = 0;
+    do {
+        ($iter, my $list) = $self->scan($iter, @args);
+        foreach my $key(@$list) {
+            $callback->($key);
+        };
+    } while ($iter);
+}
+
 # special commands. they are not redis commands.
 sub wait_one_response {
     my $self = shift;
@@ -976,6 +996,18 @@ which may break another namepace and/or change the state of redis-server, such a
 Also, unknown commands are not executed, because there is no guarantee that the command does not break another namepace.
 
 =back
+
+=head1 METHODS
+
+=head2 scan_callback
+
+    $ns->scan_callback( sub { my $key = shift; ... } );
+
+    $ns->scan_callback( match => 'foo:*', sub { my $key = shift; ... } );
+
+Execute a callback exactly once for every matching key within the namespace.
+
+The key is passed as one and only argument to the callback.
 
 =head1 AUTHOR
 

@@ -42,9 +42,14 @@ sub test {
 
     for my $key (sort keys %$json) {
         subtest $key => sub {
-            my $test = $custom_test{$key} // \&test_command;
-            $test->($key, $json->{$key});
-        };
+            eval {
+                my $test = $custom_test{$key} // \&test_command;
+                $test->($key, $json->{$key});
+                1;
+            } or do {
+                fail ("Exception in test: $@");
+            }
+        } or diag "$key -> ", explain $json->{$key};
     }
 }
 
@@ -82,6 +87,7 @@ our %before_tests = (
     },
     alternate => sub {
         for my $arg (@_) {
+            note explain $arg;
             is $arg->{type}[0], 'key', $arg->{name}[0];
             isnt $arg->{type}[1], 'key', $arg->{name}[1];
             is scalar @{$arg->{name}}, 2;
@@ -202,10 +208,17 @@ our %before_tests = (
     },
 );
 
+my %unknown;
+my $unknown_count;
 sub test_command {
     my ($key, $info) = @_;
     my ($command, $subcommand) = split / /, lc $key;
-    ok my $option = $Redis::Namespace::COMMANDS{$command}, 'exists args transfer definition' or return;
+    my $option = $Redis::Namespace::COMMANDS{$command};
+    unless (ok $option, 'exists args transfer definition') {
+        $unknown_count++;
+        $unknown{$command}++;
+        return;
+    };
     if (ref $option eq 'HASH') {
         # subcommands
         if ($subcommand && $option->{$subcommand}) {
@@ -249,5 +262,8 @@ sub test_command {
 }
 
 test();
+
+diag "$unknown_count unknown subcommand(s) in ".(scalar keys %unknown)." command(s)"
+    if $unknown_count;
 
 done_testing;

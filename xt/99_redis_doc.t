@@ -87,7 +87,6 @@ our %before_tests = (
     },
     alternate => sub {
         for my $arg (@_) {
-            note explain $arg;
             is $arg->{type}[0], 'key', $arg->{name}[0];
             isnt $arg->{type}[1], 'key', $arg->{name}[1];
             is scalar @{$arg->{name}}, 2;
@@ -229,7 +228,7 @@ sub test_command {
                 ok my $suboption = $option->{$name}, "subcommand $name" or next;
                 my ($before, $after) = @$suboption;
                 $before //= 'none';
-                if (ok my $test = $before_tests{$before}, "subcommand $name, exists test for before fileter: $before") {
+                if (ok my $test = $before_tests{$before}, "subcommand $name, exists test for before filter: $before") {
                     my $names = $subcommand->{name};
                     if (ref $names eq 'ARRAY') {
                         $test->(
@@ -252,7 +251,7 @@ sub test_command {
         my ($before, $after) = @$option;
         $before //= 'none';
         ok $Redis::Namespace::BEFORE_FILTERS{$before}, "exists before filter: $before";
-        if (ok my $test = $before_tests{$before}, "exists test for before fileter: $before") {
+        if (ok my $test = $before_tests{$before}, "exists test for before filter: $before") {
             $test->(@{$info->{arguments}});
         }
         if ($after) {

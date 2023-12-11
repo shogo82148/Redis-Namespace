@@ -118,4 +118,4 @@ jobs:
           cpanm --quiet --with-develop --installdeps --notest .
           cpanm --quiet Test::Perl::Critic
       - run: perl Build.PL
-      - run: prove -lv xt
+      - run: prove -lv xt 2>&1 

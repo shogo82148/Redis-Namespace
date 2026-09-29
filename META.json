@@ -4,7 +4,7 @@
       "Ichinose Shogo <shogo82148@gmail.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Minilla/v3.1.7, CPAN::Meta::Converter version 2.150010",
+   "generated_by" : "Minilla/v3.1.29, CPAN::Meta::Converter version 2.150013",
    "license" : [
       "perl_5"
    ],
@@ -47,7 +47,7 @@
       "runtime" : {
          "requires" : {
             "Redis" : "0",
-            "perl" : "5.010001"
+            "perl" : "5.014000"
          }
       },
       "test" : {
@@ -70,16 +70,17 @@
       "homepage" : "https://github.com/shogo82148/Redis-Namespace",
       "repository" : {
          "type" : "git",
-         "url" : "git://github.com/shogo82148/Redis-Namespace.git",
+         "url" : "https://github.com/shogo82148/Redis-Namespace.git",
          "web" : "https://github.com/shogo82148/Redis-Namespace"
       }
    },
    "version" : "0.13",
    "x_contributors" : [
       "Dan Book <grinnz@gmail.com>",
+      "Konstantin S. Uvarin <khedin@gmail.com>",
       "Mihyaeru <mihyaeru21@gmail.com>",
       "karupanerura <karupa@cpan.org>"
    ],
-   "x_serialization_backend" : "JSON::PP version 4.02",
+   "x_serialization_backend" : "JSON::PP version 4.16",
    "x_static_install" : 1
 }

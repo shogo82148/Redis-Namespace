@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/shogo82148/Redis-Namespace.svg?branch=master)](https://travis-ci.org/shogo82148/Redis-Namespace) [![MetaCPAN Release](https://badge.fury.io/pl/Redis-Namespace.svg)](https://metacpan.org/release/Redis-Namespace)
+[![Actions Status](https://github.com/shogo82148/Redis-Namespace/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/shogo82148/Redis-Namespace/actions?workflow=test) [![MetaCPAN Release](https://badge.fury.io/pl/Redis-Namespace.svg)](https://metacpan.org/release/Redis-Namespace)
 # NAME
 
 Redis::Namespace - a wrapper of Redis.pm that namespaces all Redis calls
@@ -44,6 +44,18 @@ It is useful when you have multiple systems using Redis differently in your app.
     If it is true, `Redis::Namespace` doesn't execute unsafe commands
     which may break another namepace and/or change the state of redis-server, such as `FLUSHALL` and `SHUTDOWN`.
     Also, unknown commands are not executed, because there is no guarantee that the command does not break another namepace.
+
+# METHODS
+
+## scan\_callback
+
+    $ns->scan_callback( sub { my $key = shift; ... } );
+
+    $ns->scan_callback( match => 'foo:*', sub { my $key = shift; ... } );
+
+Execute a callback exactly once for every matching key within the namespace.
+
+The key is passed as one and only argument to the callback.
 
 # AUTHOR
 

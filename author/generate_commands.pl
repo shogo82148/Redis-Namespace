@@ -331,8 +331,14 @@ sub load_valkey {
     die "unexpected version of Valkey: $version\n" unless $version =~ /\A[0-9A-Za-z.-]+\z/;
 
     my %commands;
-    for my $path (sort glob "$dir/src/commands/*.json") {
-        my $json = JSON::PP->new->utf8->decode(read_file($path));
+    # don't use glob here, it splits the pattern at whitespaces.
+    my $commands_dir = "$dir/src/commands";
+    opendir my $dh, $commands_dir or die "failed to open $commands_dir: $!\n";
+    my @files = sort grep { /\.json\z/ } readdir $dh;
+    closedir $dh;
+
+    for my $file (@files) {
+        my $json = JSON::PP->new->utf8->decode(read_file("$commands_dir/$file"));
         for my $name (keys %$json) {
             my $info = $json->{$name};
 
@@ -346,7 +352,7 @@ sub load_valkey {
             };
         }
     }
-    die "no commands are found in $dir/src/commands\n" unless %commands;
+    die "no commands are found in $commands_dir\n" unless %commands;
     return \%commands, $version;
 }
 

@@ -1,0 +1,555 @@
+#!/usr/bin/env perl
+
+# Generate the methods of Redis commands in lib/Redis/Namespace.pm
+# from the command reference of Redis.
+#
+# usage:
+#   perl author/generate_commands.pl [path/to/commands.json]
+#
+# If the path is omitted, commands.json is downloaded from $COMMANDS_URL.
+# The generated code replaces the region between the "BEGIN GENERATED COMMANDS"
+# and "END GENERATED COMMANDS" markers in lib/Redis/Namespace.pm.
+# The positions of keys are calculated from the key_specs of each command.
+# See https://redis.io/docs/latest/develop/reference/key-specs/ for details of key_specs.
+
+use strict;
+use warnings;
+use FindBin;
+use JSON::PP;
+use HTTP::Tiny;
+
+our $COMMANDS_URL = 'https://raw.githubusercontent.com/redis/docs/refs/heads/main/data/commands.json';
+our $TARGET = "$FindBin::Bin/../lib/Redis/Namespace.pm";
+
+# These commands may break other namespaces and/or change the state of redis-server.
+# They are disabled in strict mode.
+our %UNSAFE_COMMANDS = map { $_ => 1 } qw(
+    cluster
+    config
+    flushall
+    flushdb
+    readonly
+    readwrite
+    replicaof
+    slaveof
+    shutdown
+);
+
+# These commands are implemented in Redis::Namespace by hand.
+our %SKIP_COMMANDS = map { $_ => 1 } qw(
+    subscribe
+    unsubscribe
+    psubscribe
+    punsubscribe
+);
+
+# The code snippets for the commands that key_specs can't describe.
+# "before" modifies @args, the arguments of the command.
+# "after" modifies @result, the response of the command.
+# If "before" is omitted, it is generated from key_specs.
+my $REMOVE_NAMESPACE_FROM_FIRST = <<'CODE';
+if (@result) {
+    ($result[0]) = $self->rem_namespace($result[0]);
+}
+CODE
+
+my $REMOVE_NAMESPACE_FROM_STREAMS = <<'CODE';
+@result = map {
+    ref $_ eq 'ARRAY' ? [ $self->rem_namespace($_->[0]), @{$_}[1 .. $#$_] ] : $_
+} @result;
+CODE
+
+my $SORT = <<'CODE';
+my @res;
+if (@args) {
+    push @res, $self->add_namespace(shift @args);
+}
+while (@args) {
+    my $option = lc shift @args;
+    if ($option eq 'limit') {
+        my $start = shift @args;
+        my $count = shift @args;
+        push @res, $option, $start, $count;
+    } elsif ($option eq 'by' || $option eq 'store') {
+        my $key = shift @args;
+        push @res, $option, $self->add_namespace($key);
+    } elsif ($option eq 'get') {
+        my $key = shift @args;
+        ($key) = $self->add_namespace($key) unless $key eq '#';
+        push @res, $option, $key;
+    } else {
+        push @res, $option;
+    }
+}
+@args = @res;
+CODE
+
+our %OVERRIDES = (
+    # the commands that take patterns
+    keys => {
+        before => <<'CODE',
+if (defined $args[0]) {
+    $args[0] = "$self->{namespace_escaped}:$args[0]";
+}
+CODE
+        after => <<'CODE',
+@result = $self->rem_namespace(@result);
+CODE
+    },
+    scan => {
+        before => <<'CODE',
+my @res;
+
+# first arg is iteration key
+if (@args) {
+    push @res, shift @args;
+}
+
+# parse options
+my $has_pattern = 0;
+while (@args) {
+    my $option = lc shift @args;
+    if ($option eq 'match') {
+        my $pattern = shift @args;
+        push @res, $option, "$self->{namespace_escaped}:$pattern";
+        $has_pattern = 1;
+    } elsif ($option eq 'count' || $option eq 'type') {
+        push @res, $option, shift @args;
+    } else {
+        push @res, $option;
+    }
+}
+
+# add pattern option
+unless ($has_pattern) {
+    push @res, 'match', "$self->{namespace_escaped}:*";
+}
+@args = @res;
+CODE
+        after => <<'CODE',
+if (@result) {
+    @result = ($result[0], [ $self->rem_namespace(@{ $result[1] || [] }) ]);
+}
+CODE
+    },
+    sort    => { before => $SORT },
+    sort_ro => { before => $SORT },
+
+    # the commands that take channels
+    publish => {
+        before => <<'CODE',
+if (@args) {
+    ($args[0]) = $self->add_namespace($args[0]);
+}
+CODE
+    },
+
+    # the pattern is for command names, not for keys
+    'command list' => { before => '' },
+
+    # DEBUG OBJECT is not described in the command reference
+    'debug object' => {
+        before => <<'CODE',
+if (@args) {
+    ($args[0]) = $self->add_namespace($args[0]);
+}
+CODE
+    },
+
+    # the commands that return the key names
+    blpop      => { after => $REMOVE_NAMESPACE_FROM_FIRST },
+    brpop      => { after => $REMOVE_NAMESPACE_FROM_FIRST },
+    bzpopmax   => { after => $REMOVE_NAMESPACE_FROM_FIRST },
+    bzpopmin   => { after => $REMOVE_NAMESPACE_FROM_FIRST },
+    blmpop     => { after => $REMOVE_NAMESPACE_FROM_FIRST },
+    bzmpop     => { after => $REMOVE_NAMESPACE_FROM_FIRST },
+    lmpop      => { after => $REMOVE_NAMESPACE_FROM_FIRST },
+    zmpop      => { after => $REMOVE_NAMESPACE_FROM_FIRST },
+    xread      => { after => $REMOVE_NAMESPACE_FROM_STREAMS },
+    xreadgroup => { after => $REMOVE_NAMESPACE_FROM_STREAMS },
+);
+
+sub main {
+    my $path = shift;
+    my $json = defined $path ? read_file($path) : download($COMMANDS_URL);
+    my $commands = JSON::PP->new->utf8->decode($json);
+
+    # collect the definitions of commands
+    my %defs;
+    for my $name (sort keys %$commands) {
+        # skip the commands of modules. e.g. JSON.GET, FT.SEARCH
+        next if $name =~ /\./;
+
+        my ($cmd, $sub, @rest) = split / /, lc $name;
+        die "unexpected command name: $name\n" if @rest;
+        next if $SKIP_COMMANDS{$cmd};
+
+        # skip the commands that can't be method names. e.g. RESTORE-ASKING
+        # Redis.pm treats underscores in method names as spaces,
+        # so the commands that contains underscores can't be called either. e.g. BITFIELD_RO
+        next unless $cmd =~ /\A[a-z0-9]+\z/;
+
+        my $def = build_definition($name, $commands->{$name}, defined $sub ? 1 : 0)
+            or next;
+        if (defined $sub) {
+            $defs{$cmd}{subcommands}{$sub} = $def;
+        } else {
+            $defs{$cmd}{command} = $def;
+        }
+    }
+
+    # the sub-commands that are not described in the command reference
+    for my $name (sort keys %OVERRIDES) {
+        my ($cmd, $sub) = split / /, $name;
+        next unless defined $sub;
+        $defs{$cmd}{subcommands}{$sub} //= build_definition(uc $name, {}, 1);
+    }
+
+    my $code = render_header();
+    for my $cmd (sort keys %defs) {
+        my $def = $defs{$cmd};
+        if ($def->{subcommands}) {
+            $code .= render_container($cmd, $def->{subcommands});
+            for my $sub (sort keys %{$def->{subcommands}}) {
+                next unless $sub =~ /\A[a-z0-9]+\z/;
+                $code .= render_command("${cmd}_$sub", $cmd, $def->{subcommands}{$sub});
+            }
+        } else {
+            $code .= render_command($cmd, $cmd, $def->{command});
+        }
+    }
+    $code .= render_footer();
+
+    my $source = read_file($TARGET);
+    $source =~ s/^# BEGIN GENERATED COMMANDS\n.*?^# END GENERATED COMMANDS\n/$code/sm
+        or die "markers are not found in $TARGET\n";
+    write_file($TARGET, $source);
+}
+
+# build_definition returns the code snippets of the command.
+sub build_definition {
+    my ($name, $info, $offset) = @_;
+    my $override = $OVERRIDES{lc $name} || {};
+
+    my $before = $override->{before};
+    unless (defined $before) {
+        $before = key_specs_code($name, $info, $offset);
+        return unless defined $before;
+    }
+
+    return {
+        name   => $name,
+        before => $before,
+        after  => $override->{after} // '',
+    };
+}
+
+# key_specs_code generates the code that adds the namespace to the keys
+# from key_specs of the command.
+sub key_specs_code {
+    my ($name, $info, $offset) = @_;
+    my @specs = @{$info->{key_specs} || []};
+
+    unless (@specs) {
+        # the commands that take patterns or channels without key_specs
+        # are not namespaced correctly by the automatic generation.
+        my @suspicious = grep {
+            $_->{type} eq 'key' || $_->{type} eq 'pattern' || $_->{name} =~ /channel/
+        } flatten_arguments($info->{arguments} || []);
+        if (@suspicious) {
+            warn "skip $name: it has key-like arguments, but no key_specs\n";
+            return;
+        }
+        return '';
+    }
+
+    # simple case: the command takes only one key.
+    if (@specs == 1 && $specs[0]{begin_search}{type} eq 'index'
+        && $specs[0]{find_keys}{type} eq 'range' && $specs[0]{find_keys}{spec}{lastkey} == 0) {
+        my $i = $specs[0]{begin_search}{spec}{index} - 1 - $offset;
+        return <<"CODE";
+if (\@args > $i) {
+    (\$args[$i]) = \$self->add_namespace(\$args[$i]);
+}
+CODE
+    }
+
+    # simple case: the keys are not overlapped.
+    if (@specs == 1) {
+        my $code = key_spec_code($name, $specs[0], $offset, sub {
+            my $i = shift;
+            return "(\$args[$i]) = \$self->add_namespace(\$args[$i]);\n";
+        });
+        return unless defined $code;
+        return $code;
+    }
+
+    # general case: collect the positions of the keys, and then add the namespace.
+    my $code = "my \@positions;\n";
+    for my $spec (@specs) {
+        my $c = key_spec_code($name, $spec, $offset, sub {
+            my $i = shift;
+            return "push \@positions, $i;\n";
+        });
+        return unless defined $c;
+        $code .= $c =~ /^my /m ? "{\n" . indent($c) . "}\n" : $c;
+    }
+    $code .= <<'CODE';
+my %seen;
+for my $i (grep { !$seen{$_}++ } @positions) {
+    ($args[$i]) = $self->add_namespace($args[$i]);
+}
+CODE
+    return $code;
+}
+
+# key_spec_code generates the code for a key_spec.
+# It follows the implementation of getKeysUsingKeySpecs in Redis.
+# The indexes in key_specs count the command name (and the sub-command name),
+# but the indexes of @args don't.
+sub key_spec_code {
+    my ($name, $spec, $offset, $emit) = @_;
+    my $begin = $spec->{begin_search};
+    my $find = $spec->{find_keys};
+
+    my $code = '';
+    my $first;
+    my $close = '';
+    if ($begin->{type} eq 'index') {
+        $first = $begin->{spec}{index} - 1 - $offset;
+    } elsif ($begin->{type} eq 'keyword') {
+        my $keyword = lc $begin->{spec}{keyword};
+        my $startfrom = $begin->{spec}{startfrom};
+        my $loop;
+        if ($startfrom >= 0) {
+            my $start = $startfrom - 1 - $offset;
+            $loop = "for (my \$i = $start; \$i < \@args; \$i++)";
+        } else {
+            $loop = "for (my \$i = \@args - @{[-$startfrom]}; \$i >= 0; \$i--)";
+        }
+        $code .= <<"CODE";
+my \$first;
+$loop {
+    if (lc(\$args[\$i] // '') eq '$keyword') {
+        \$first = \$i + 1;
+        last;
+    }
+}
+if (defined \$first) {
+CODE
+        $first = '$first';
+        $close = "}\n";
+    } else {
+        warn "skip $name: unknown begin_search type: $begin->{type}\n";
+        return;
+    }
+
+    my $body;
+    if ($find->{type} eq 'range') {
+        my $lastkey = $find->{spec}{lastkey};
+        my $keystep = $find->{spec}{keystep};
+        my $limit = $find->{spec}{limit};
+        my $last;
+        if ($lastkey >= 0) {
+            $last = add($first, $lastkey);
+        } elsif ($limit <= 1) {
+            $last = '';
+        } else {
+            my $count = 'int((@args - ' . $first . ') / ' . $limit . ')';
+            $last = add($first, $count) . ' - ' . (-$lastkey);
+        }
+        if ($lastkey == 0) {
+            $body = "if (\@args > $first) {\n" . indent($emit->($first)) . "}\n";
+        } else {
+            my $step = $keystep == 1 ? '$i++' : "\$i += $keystep";
+            my $cond = $last eq ''
+                ? ($lastkey == -1 ? '$i < @args' : "\$i < \@args - @{[-$lastkey - 1]}")
+                : "\$i <= $last && \$i < \@args";
+            $body = "for (my \$i = $first; $cond; $step) {\n"
+                . indent($emit->('$i')) . "}\n";
+        }
+    } elsif ($find->{type} eq 'keynum') {
+        my $keynumidx = add($first, $find->{spec}{keynumidx});
+        my $firstkey = add($first, $find->{spec}{firstkey});
+        my $keystep = $find->{spec}{keystep};
+        my $step = $keystep == 1 ? '$i++' : "\$i += $keystep";
+        my $numkeys = $keystep == 1 ? '$numkeys' : "\$numkeys * $keystep";
+        $body = <<"CODE" . indent(indent($emit->('$i'))) . "    }\n}\n";
+my \$numkeys = \$args[$keynumidx];
+if (defined \$numkeys && \$numkeys =~ /\\A[0-9]+\\z/) {
+    for (my \$i = $firstkey; \$i < $firstkey + $numkeys && \$i < \@args; $step) {
+CODE
+    } else {
+        warn "skip $name: unknown find_keys type: $find->{type}\n";
+        return;
+    }
+
+    if ($close) {
+        return $code . indent($body) . $close;
+    }
+    return $code . $body;
+}
+
+sub render_header {
+    return <<"CODE";
+# BEGIN GENERATED COMMANDS
+# This section is generated by author/generate_commands.pl from
+# $COMMANDS_URL
+# DO NOT EDIT.
+
+## no critic (Subroutines::ProhibitBuiltinHomonyms)
+CODE
+}
+
+sub render_footer {
+    return <<'CODE';
+
+## use critic
+# END GENERATED COMMANDS
+CODE
+}
+
+sub render_command {
+    my ($method, $cmd, $def) = @_;
+    my $code = "\n# $def->{name}\n";
+    $code .= "sub $method {\n";
+    $code .= "    my (\$self, \@args) = \@_;\n";
+    $code .= "    croak \"unsafe command '$cmd'\" if \$self->{strict};\n" if $UNSAFE_COMMANDS{$cmd};
+    $code .= indent(render_body($def, "\$self->{redis}->$method("));
+    $code .= "}\n";
+    return $code;
+}
+
+sub render_container {
+    my ($cmd, $subcommands) = @_;
+    my $upper = uc $cmd;
+    my $code = "\n# $upper\n";
+    $code .= "sub $cmd {\n";
+    $code .= "    my (\$self, \@args) = \@_;\n";
+    $code .= "    croak \"unsafe command '$cmd'\" if \$self->{strict};\n" if $UNSAFE_COMMANDS{$cmd};
+    $code .= "    return \$self->{redis}->$cmd(\@args) if !\@args || ref \$args[0];\n";
+    $code .= "\n";
+    $code .= "    my \$subcommand = lc \$args[0];\n";
+
+    # group the sub-commands by their bodies
+    my %groups;
+    my @order;
+    for my $sub (sort keys %$subcommands) {
+        my $def = $subcommands->{$sub};
+        my $body;
+        if ($def->{before} eq '' && $def->{after} eq '') {
+            $body = "return \$self->{redis}->$cmd(\@args);\n";
+        } else {
+            $body = "my \$name = shift \@args;\n"
+                . render_body($def, "\$self->{redis}->$cmd(\$name, ");
+        }
+        push @order, $body unless $groups{$body};
+        push @{$groups{$body}}, $sub;
+    }
+
+    for my $body (@order) {
+        my @subs = @{$groups{$body}};
+        $code .= "\n";
+        $code .= "    # " . join(', ', map { "$upper \U$_" } @subs) . "\n" if @subs <= 3;
+        if (@subs == 1) {
+            $code .= "    if (\$subcommand eq '$subs[0]') {\n";
+        } else {
+            $code .= "    if (\n";
+            $code .= join " ||\n", map { "        \$subcommand eq '$_'" } @subs;
+            $code .= "\n    ) {\n";
+        }
+        $code .= indent(indent($body));
+        $code .= "    }\n";
+    }
+
+    $code .= <<"CODE";
+
+    croak "unknown command '$cmd \$args[0]'" if \$self->{strict};
+    carp "unknown command '$cmd \$args[0]'. passing arguments to the redis server as is.";
+    return \$self->{redis}->$cmd(\@args);
+}
+CODE
+    return $code;
+}
+
+# render_body renders the body of the command.
+# $call is the code to call the command of Redis.pm without the arguments. e.g. "$self->{redis}->get("
+sub render_body {
+    my ($def, $call) = @_;
+    my $before = $def->{before};
+    my $after = $def->{after};
+
+    if ($before eq '' && $after eq '') {
+        return "return $call\@args);\n";
+    }
+
+    my $code = "my \$cb = \@args && ref \$args[-1] eq 'CODE' ? pop \@args : undef;\n";
+    $code .= "\n$before" if $before ne '';
+
+    if ($after eq '') {
+        $code .= "\n";
+        $code .= "push \@args, \$cb if \$cb;\n";
+        $code .= "return $call\@args);\n";
+        return $code;
+    }
+
+    $code .= "\n";
+    $code .= "my \$after = sub {\n";
+    $code .= "    my \@result = \@_;\n";
+    $code .= indent($after);
+    $code .= "    return \@result;\n";
+    $code .= "};\n";
+    $code .= "if (\$cb) {\n";
+    $code .= "    return $call\@args, sub {\n";
+    $code .= "        my (\$result, \$error) = \@_;\n";
+    $code .= "        \$result = [ \$after->(\@\$result) ] if ref \$result eq 'ARRAY';\n";
+    $code .= "        \$cb->(\$result, \$error);\n";
+    $code .= "    });\n";
+    $code .= "}\n";
+    $code .= "return \$after->($call\@args)) if wantarray;\n";
+    $code .= "my \$result = $call\@args);\n";
+    $code .= "return ref \$result eq 'ARRAY' ? [ \$after->(\@\$result) ] : \$result;\n";
+    return $code;
+}
+
+sub flatten_arguments {
+    my $args = shift;
+    return map { ($_, flatten_arguments($_->{arguments} || [])) } @$args;
+}
+
+# add returns the code of "$a + $b". it is folded if possible.
+sub add {
+    my ($a, $b) = @_;
+    return $a + $b if $a =~ /\A-?[0-9]+\z/ && $b =~ /\A-?[0-9]+\z/;
+    return $a if $b eq '0';
+    return "$a + $b";
+}
+
+sub indent {
+    my $code = shift;
+    $code =~ s/^(?=.)/    /mg;
+    return $code;
+}
+
+sub download {
+    my $url = shift;
+    my $res = HTTP::Tiny->new->get($url);
+    die "failed to download $url: $res->{status} $res->{reason}\n" unless $res->{success};
+    return $res->{content};
+}
+
+sub read_file {
+    my $path = shift;
+    open my $fh, '<:raw', $path or die "failed to open $path: $!\n";
+    local $/;
+    return scalar <$fh>;
+}
+
+sub write_file {
+    my ($path, $content) = @_;
+    open my $fh, '>:raw', $path or die "failed to open $path: $!\n";
+    print $fh $content;
+    close $fh;
+}
+
+main(@ARGV);

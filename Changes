@@ -1,6 +1,8 @@
 Revision history for Perl extension Redis::Namespace
 
 {{$NEXT}}
+        - generate the methods of Valkey commands from the command reference of Valkey
+          e.g. DELIFEQ, COMMANDLOG, SCRIPT SHOW
         - generate the methods of Redis commands from the command reference of Redis (redis/docs).
           %BEFORE_FILTERS, %AFTER_FILTERS, %COMMANDS and %UNSAFE_COMMANDS are removed.
         - support more commands of recent Redis

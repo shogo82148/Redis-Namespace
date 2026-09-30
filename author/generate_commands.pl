@@ -1,12 +1,18 @@
 #!/usr/bin/env perl
 
 # Generate the methods of Redis commands in lib/Redis/Namespace.pm
-# from the command reference of Redis.
+# from the command references of Redis and Valkey.
 #
 # usage:
-#   perl author/generate_commands.pl [path/to/commands.json]
+#   perl author/generate_commands.pl [--redis path/to/commands.json] [--valkey path/to/valkey] [--valkey-version VERSION]
 #
-# If the path is omitted, commands.json is downloaded from $COMMANDS_URL.
+# --redis: the command reference of Redis.
+#   If it is omitted, it is downloaded from $REDIS_COMMANDS_URL.
+# --valkey: the source code of Valkey. The command reference is in src/commands.
+#   If it is omitted, the latest release of Valkey is cloned from $VALKEY_REPOSITORY.
+# --valkey-version: the version of Valkey. It is used only for the comment of the generated code.
+#
+# This script requires curl and git commands.
 # The generated code replaces the region between the "BEGIN GENERATED COMMANDS"
 # and "END GENERATED COMMANDS" markers in lib/Redis/Namespace.pm.
 # The positions of keys are calculated from the key_specs of each command.
@@ -16,9 +22,11 @@ use strict;
 use warnings;
 use FindBin;
 use JSON::PP;
-use HTTP::Tiny;
+use Getopt::Long;
+use File::Temp qw(tempdir);
 
-our $COMMANDS_URL = 'https://raw.githubusercontent.com/redis/docs/refs/heads/main/data/commands.json';
+our $REDIS_COMMANDS_URL = 'https://raw.githubusercontent.com/redis/docs/refs/heads/main/data/commands.json';
+our $VALKEY_REPOSITORY = 'https://github.com/valkey-io/valkey';
 our $TARGET = "$FindBin::Bin/../lib/Redis/Namespace.pm";
 
 # These commands may break other namespaces and/or change the state of redis-server.
@@ -47,6 +55,12 @@ our %UNSAFE_COMMANDS = map { $_ => 1 } (
     'function delete',
     'function flush',
     'function restore',
+);
+
+# The commands that have different key_specs between Redis and Valkey.
+# The definitions of Redis are used for them.
+our %KNOWN_DIFFERENCES = map { $_ => 1 } (
+    'EXEC', # Valkey says "unknown", but EXEC takes no keys.
 );
 
 # These commands are implemented in Redis::Namespace by hand.
@@ -182,6 +196,26 @@ if (@args) {
 CODE
     },
 
+    # the commands that take shard channels.
+    # key_specs of them have the NOT_KEY flag.
+    spublish => {
+        before => <<'CODE',
+if (@args) {
+    ($args[0]) = $self->add_namespace($args[0]);
+}
+CODE
+    },
+    ssubscribe => {
+        before => <<'CODE',
+@args = $self->add_namespace(@args);
+CODE
+    },
+    sunsubscribe => {
+        before => <<'CODE',
+@args = $self->add_namespace(@args);
+CODE
+    },
+
     # the pattern is for command names, not for keys
     'command list' => { before => '' },
 
@@ -208,9 +242,13 @@ CODE
 );
 
 sub main {
-    my $path = shift;
-    my $json = defined $path ? read_file($path) : download($COMMANDS_URL);
-    my $commands = JSON::PP->new->utf8->decode($json);
+    my %opts;
+    GetOptions(\%opts, 'redis=s', 'valkey=s', 'valkey-version=s')
+        or die "usage: $0 [--redis path/to/commands.json] [--valkey path/to/valkey] [--valkey-version VERSION]\n";
+
+    my $redis = load_redis($opts{redis});
+    my ($valkey, $valkey_version) = load_valkey($opts{valkey}, $opts{'valkey-version'});
+    my $commands = merge_commands($redis, $valkey);
 
     # collect the definitions of commands
     my %defs;
@@ -246,7 +284,7 @@ sub main {
         $defs{$cmd}{subcommands}{$sub} //= build_definition(uc $name, {}, 1);
     }
 
-    my $code = render_header();
+    my $code = render_header($valkey_version);
     for my $cmd (sort keys %defs) {
         my $def = $defs{$cmd};
         if ($def->{subcommands}) {
@@ -265,6 +303,128 @@ sub main {
     $source =~ s/^# BEGIN GENERATED COMMANDS\n.*?^# END GENERATED COMMANDS\n/$code/sm
         or die "markers are not found in $TARGET\n";
     write_file($TARGET, $source);
+}
+
+# load_redis loads the command reference of Redis.
+sub load_redis {
+    my $path = shift;
+    unless (defined $path) {
+        my $dir = tempdir(CLEANUP => 1);
+        $path = "$dir/commands.json";
+        run('curl', '-sSfL', '-o', $path, $REDIS_COMMANDS_URL);
+    }
+    return JSON::PP->new->utf8->decode(read_file($path));
+}
+
+# load_valkey loads the command reference of Valkey,
+# and converts it into the same format as Redis.
+sub load_valkey {
+    my ($dir, $version) = @_;
+    unless (defined $dir) {
+        $version //= latest_valkey_version();
+        $dir = tempdir(CLEANUP => 1);
+        run('git', '-c', 'advice.detachedHead=false', 'clone', '--quiet', '--depth', '1',
+            '--branch', $version, '--filter=blob:none', '--sparse', $VALKEY_REPOSITORY, $dir);
+        run('git', '-C', $dir, 'sparse-checkout', 'set', 'src/commands');
+    }
+    $version //= 'unknown';
+    die "unexpected version of Valkey: $version\n" unless $version =~ /\A[0-9A-Za-z.-]+\z/;
+
+    my %commands;
+    for my $path (sort glob "$dir/src/commands/*.json") {
+        my $json = JSON::PP->new->utf8->decode(read_file($path));
+        for my $name (keys %$json) {
+            my $info = $json->{$name};
+
+            # skip the commands only for Sentinel
+            next if grep { $_ eq 'ONLY_SENTINEL' } @{$info->{command_flags} || []};
+
+            my $fullname = $info->{container} ? "$info->{container} $name" : $name;
+            $commands{uc $fullname} = {
+                key_specs => [ map { convert_valkey_key_spec($fullname, $_) } @{$info->{key_specs} || []} ],
+                arguments => $info->{arguments} || [],
+            };
+        }
+    }
+    die "no commands are found in $dir/src/commands\n" unless %commands;
+    return \%commands, $version;
+}
+
+# latest_valkey_version returns the latest release of Valkey.
+sub latest_valkey_version {
+    my @versions =
+        sort { version_cmp($a, $b) }
+        grep { /\A[0-9]+\.[0-9]+\.[0-9]+\z/ }
+        map { m{\trefs/tags/(.*)\z} ? $1 : () }
+        split /\n/, run('git', 'ls-remote', '--tags', '--refs', $VALKEY_REPOSITORY);
+    die "no releases of Valkey are found\n" unless @versions;
+    return $versions[-1];
+}
+
+sub version_cmp {
+    my @a = split /\./, shift;
+    my @b = split /\./, shift;
+    return $a[0] <=> $b[0] || $a[1] <=> $b[1] || $a[2] <=> $b[2];
+}
+
+# convert_valkey_key_spec converts a key_spec of Valkey into the format of Redis.
+# e.g. {"index": {"pos": 1}} => {"type": "index", "spec": {"index": 1}}
+sub convert_valkey_key_spec {
+    my ($name, $spec) = @_;
+    my @begin = %{$spec->{begin_search} || {}};
+    my @find = %{$spec->{find_keys} || {}};
+    die "unexpected key_specs in $name\n" unless @begin == 2 && @find == 2;
+
+    my ($begin_type, $begin_spec) = @begin;
+    my %begin = (type => $begin_type, spec => {});
+    if ($begin_type eq 'index') {
+        $begin{spec} = { index => $begin_spec->{pos} };
+    } elsif ($begin_type eq 'keyword') {
+        $begin{spec} = { keyword => $begin_spec->{keyword}, startfrom => $begin_spec->{startfrom} };
+    }
+
+    my ($find_type, $find_spec) = @find;
+    my %find = (type => $find_type, spec => {});
+    if ($find_type eq 'range') {
+        $find{spec} = { lastkey => $find_spec->{lastkey}, keystep => $find_spec->{step}, limit => $find_spec->{limit} };
+    } elsif ($find_type eq 'keynum') {
+        $find{spec} = { keynumidx => $find_spec->{keynumidx}, firstkey => $find_spec->{firstkey}, keystep => $find_spec->{step} };
+    }
+
+    my %result = (begin_search => \%begin, find_keys => \%find);
+    $result{not_key} = JSON::PP::true if grep { $_ eq 'NOT_KEY' } @{$spec->{flags} || []};
+    return \%result;
+}
+
+# merge_commands merges the command references of Redis and Valkey.
+sub merge_commands {
+    my ($redis, $valkey) = @_;
+    my %commands = %$redis;
+    for my $name (sort keys %$valkey) {
+        unless ($redis->{$name}) {
+            $commands{$name} = $valkey->{$name};
+            next;
+        }
+        my $r = key_specs_signature($redis->{$name});
+        my $v = key_specs_signature($valkey->{$name});
+        next if $r eq $v || $KNOWN_DIFFERENCES{$name};
+        die "key_specs of $name are different between Redis and Valkey:\n  Redis:  $r\n  Valkey: $v\n";
+    }
+    return \%commands;
+}
+
+# key_specs_signature returns a string that represents the positions of keys.
+sub key_specs_signature {
+    my $info = shift;
+    my $json = JSON::PP->new->canonical;
+    return $json->encode([ map {
+        my $spec = $_;
+        {
+            begin_search => $spec->{begin_search},
+            find_keys    => $spec->{find_keys},
+            not_key      => $spec->{not_key} ? 1 : 0,
+        };
+    } @{$info->{key_specs} || []} ]);
 }
 
 # build_definition returns the code snippets of the command.
@@ -289,7 +449,9 @@ sub build_definition {
 # from key_specs of the command.
 sub key_specs_code {
     my ($name, $info, $offset) = @_;
-    my @specs = @{$info->{key_specs} || []};
+
+    # NOT_KEY means that the argument is not a key. e.g. the cursor of CLUSTERSCAN
+    my @specs = grep { !$_->{not_key} } @{$info->{key_specs} || []};
 
     unless (@specs) {
         # the commands that take patterns or channels without key_specs
@@ -433,10 +595,12 @@ CODE
 }
 
 sub render_header {
+    my $valkey_version = shift;
     return <<"CODE";
 # BEGIN GENERATED COMMANDS
 # This section is generated by author/generate_commands.pl from
-# $COMMANDS_URL
+# - $REDIS_COMMANDS_URL
+# - $VALKEY_REPOSITORY/tree/$valkey_version/src/commands
 # DO NOT EDIT.
 
 ## no critic (Subroutines::ProhibitBuiltinHomonyms)
@@ -608,11 +772,14 @@ sub indent {
     return $code;
 }
 
-sub download {
-    my $url = shift;
-    my $res = HTTP::Tiny->new->get($url);
-    die "failed to download $url: $res->{status} $res->{reason}\n" unless $res->{success};
-    return $res->{content};
+# run runs the command, and returns its output.
+sub run {
+    my @command = @_;
+    open my $fh, '-|', @command or die "failed to run @command: $!\n";
+    local $/;
+    my $output = <$fh> // '';
+    close $fh or die "failed to run @command: exit status $?\n";
+    return $output;
 }
 
 sub read_file {

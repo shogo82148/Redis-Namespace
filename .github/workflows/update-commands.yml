@@ -1,0 +1,58 @@
+name: "Update commands"
+on:
+  schedule:
+    - cron: "0 0 * * 1" # every Monday
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: auto-update-commands
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Perl
+        uses: shogo82148/actions-setup-perl@ac3202722f5744e62a8fa3af3e1aaaebb08861f3 # v1.44.0
+        with:
+          perl-version: "5"
+
+      - name: Install
+        run: cpanm --quiet --installdeps --notest .
+
+      - name: Download commands.json
+        run: curl -sSfL -o "$RUNNER_TEMP/commands.json" https://raw.githubusercontent.com/redis/docs/refs/heads/main/data/commands.json
+
+      - name: Generate
+        run: perl author/generate_commands.pl "$RUNNER_TEMP/commands.json"
+
+      - name: Test
+        run: prove -l t/00_compile.t t/12_filters.t
+
+      - name: Create a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "commands are up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit -am "update the generated commands"
+          git push --force origin "$BRANCH"
+
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr create \
+              --base "${{ github.event.repository.default_branch }}" \
+              --head "$BRANCH" \
+              --title "Update the generated commands" \
+              --body "This pull request is created by the \"Update commands\" workflow. It regenerates the methods of Redis commands from https://raw.githubusercontent.com/redis/docs/refs/heads/main/data/commands.json."
+          fi

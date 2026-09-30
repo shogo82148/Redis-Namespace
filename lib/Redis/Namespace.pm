@@ -365,19 +365,39 @@ sub acl {
 
     if (
         $subcommand eq 'cat' ||
-        $subcommand eq 'deluser' ||
         $subcommand eq 'dryrun' ||
         $subcommand eq 'genpass' ||
         $subcommand eq 'getuser' ||
         $subcommand eq 'help' ||
         $subcommand eq 'list' ||
-        $subcommand eq 'load' ||
         $subcommand eq 'log' ||
-        $subcommand eq 'save' ||
-        $subcommand eq 'setuser' ||
         $subcommand eq 'users' ||
         $subcommand eq 'whoami'
     ) {
+        return $self->{redis}->acl(@args);
+    }
+
+    # ACL DELUSER
+    if ($subcommand eq 'deluser') {
+        croak "unsafe command 'acl deluser'" if $self->{strict};
+        return $self->{redis}->acl(@args);
+    }
+
+    # ACL LOAD
+    if ($subcommand eq 'load') {
+        croak "unsafe command 'acl load'" if $self->{strict};
+        return $self->{redis}->acl(@args);
+    }
+
+    # ACL SAVE
+    if ($subcommand eq 'save') {
+        croak "unsafe command 'acl save'" if $self->{strict};
+        return $self->{redis}->acl(@args);
+    }
+
+    # ACL SETUSER
+    if ($subcommand eq 'setuser') {
+        croak "unsafe command 'acl setuser'" if $self->{strict};
         return $self->{redis}->acl(@args);
     }
 
@@ -395,6 +415,7 @@ sub acl_cat {
 # ACL DELUSER
 sub acl_deluser {
     my ($self, @args) = @_;
+    croak "unsafe command 'acl deluser'" if $self->{strict};
     return $self->{redis}->acl_deluser(@args);
 }
 
@@ -431,6 +452,7 @@ sub acl_list {
 # ACL LOAD
 sub acl_load {
     my ($self, @args) = @_;
+    croak "unsafe command 'acl load'" if $self->{strict};
     return $self->{redis}->acl_load(@args);
 }
 
@@ -443,12 +465,14 @@ sub acl_log {
 # ACL SAVE
 sub acl_save {
     my ($self, @args) = @_;
+    croak "unsafe command 'acl save'" if $self->{strict};
     return $self->{redis}->acl_save(@args);
 }
 
 # ACL SETUSER
 sub acl_setuser {
     my ($self, @args) = @_;
+    croak "unsafe command 'acl setuser'" if $self->{strict};
     return $self->{redis}->acl_setuser(@args);
 }
 
@@ -1925,6 +1949,7 @@ sub expiretime {
 # FAILOVER
 sub failover {
     my ($self, @args) = @_;
+    croak "unsafe command 'failover'" if $self->{strict};
     return $self->{redis}->failover(@args);
 }
 
@@ -1965,17 +1990,32 @@ sub function {
 
     my $subcommand = lc $args[0];
 
+    # FUNCTION DELETE
+    if ($subcommand eq 'delete') {
+        croak "unsafe command 'function delete'" if $self->{strict};
+        return $self->{redis}->function(@args);
+    }
+
     if (
-        $subcommand eq 'delete' ||
         $subcommand eq 'dump' ||
-        $subcommand eq 'flush' ||
         $subcommand eq 'help' ||
         $subcommand eq 'kill' ||
         $subcommand eq 'list' ||
         $subcommand eq 'load' ||
-        $subcommand eq 'restore' ||
         $subcommand eq 'stats'
     ) {
+        return $self->{redis}->function(@args);
+    }
+
+    # FUNCTION FLUSH
+    if ($subcommand eq 'flush') {
+        croak "unsafe command 'function flush'" if $self->{strict};
+        return $self->{redis}->function(@args);
+    }
+
+    # FUNCTION RESTORE
+    if ($subcommand eq 'restore') {
+        croak "unsafe command 'function restore'" if $self->{strict};
         return $self->{redis}->function(@args);
     }
 
@@ -1987,6 +2027,7 @@ sub function {
 # FUNCTION DELETE
 sub function_delete {
     my ($self, @args) = @_;
+    croak "unsafe command 'function delete'" if $self->{strict};
     return $self->{redis}->function_delete(@args);
 }
 
@@ -1999,6 +2040,7 @@ sub function_dump {
 # FUNCTION FLUSH
 sub function_flush {
     my ($self, @args) = @_;
+    croak "unsafe command 'function flush'" if $self->{strict};
     return $self->{redis}->function_flush(@args);
 }
 
@@ -2029,6 +2071,7 @@ sub function_load {
 # FUNCTION RESTORE
 sub function_restore {
     my ($self, @args) = @_;
+    croak "unsafe command 'function restore'" if $self->{strict};
     return $self->{redis}->function_restore(@args);
 }
 
@@ -3262,27 +3305,20 @@ sub migrate {
     my ($self, @args) = @_;
     my $cb = @args && ref $args[-1] eq 'CODE' ? pop @args : undef;
 
-    my @positions;
     if (@args > 2) {
-        push @positions, 2;
+        # add_namespace keeps the empty string for the KEYS option as is.
+        ($args[2]) = $self->add_namespace($args[2]);
     }
-    {
-        my $first;
-        for (my $i = @args - 2; $i >= 0; $i--) {
-            if (lc($args[$i] // '') eq 'keys') {
-                $first = $i + 1;
-                last;
-            }
+    for (my $i = 5; $i < @args; $i++) {
+        my $option = lc($args[$i] // '');
+        if ($option eq 'auth') {
+            $i += 1;
+        } elsif ($option eq 'auth2') {
+            $i += 2;
+        } elsif ($option eq 'keys') {
+            @args[$i + 1 .. $#args] = $self->add_namespace(@args[$i + 1 .. $#args]);
+            last;
         }
-        if (defined $first) {
-            for (my $i = $first; $i < @args; $i++) {
-                push @positions, $i;
-            }
-        }
-    }
-    my %seen;
-    for my $i (grep { !$seen{$_}++ } @positions) {
-        ($args[$i]) = $self->add_namespace($args[$i]);
     }
 
     push @args, $cb if $cb;
@@ -3772,6 +3808,7 @@ sub renamenx {
 # REPLCONF
 sub replconf {
     my ($self, @args) = @_;
+    croak "unsafe command 'replconf'" if $self->{strict};
     return $self->{redis}->replconf(@args);
 }
 
@@ -4533,6 +4570,7 @@ sub touch {
 # TRIMSLOTS
 sub trimslots {
     my ($self, @args) = @_;
+    croak "unsafe command 'trimslots'" if $self->{strict};
     return $self->{redis}->trimslots(@args);
 }
 

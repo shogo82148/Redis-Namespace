@@ -70,6 +70,12 @@ subtest 'keyword' => sub {
     $ns->migrate('localhost', 6379, '', 0, 1000, 'REPLACE', 'KEYS', 'foo', 'bar');
     is_deeply last_call(), ['migrate', 'localhost', 6379, '', 0, 1000, 'REPLACE', 'KEYS', 'ns:foo', 'ns:bar'], 'migrate';
 
+    $ns->migrate('localhost', 6379, 'foo', 0, 1000, 'AUTH2', 'keys', 'password');
+    is_deeply last_call(), ['migrate', 'localhost', 6379, 'ns:foo', 0, 1000, 'AUTH2', 'keys', 'password'], 'migrate with AUTH2';
+
+    $ns->migrate('localhost', 6379, '', 0, 1000, 'AUTH', 'keys', 'KEYS', 'foo', 'keys', 'bar');
+    is_deeply last_call(), ['migrate', 'localhost', 6379, '', 0, 1000, 'AUTH', 'keys', 'KEYS', 'ns:foo', 'ns:keys', 'ns:bar'], 'migrate with AUTH and KEYS';
+
     $ns->xread('COUNT', 2, 'STREAMS', 'foo', 'bar', 0, 0);
     is_deeply last_call(), ['xread', 'COUNT', 2, 'STREAMS', 'ns:foo', 'ns:bar', 0, 0], 'xread';
 
@@ -144,6 +150,18 @@ subtest 'strict mode' => sub {
 
     eval { $ns->flushall };
     like $@, qr/unsafe command 'flushall'/, 'croak unsafe command';
+
+    eval { $ns->acl_setuser('user') };
+    like $@, qr/unsafe command 'acl setuser'/, 'croak unsafe sub-command method';
+
+    eval { $ns->acl('SETUSER', 'user') };
+    like $@, qr/unsafe command 'acl setuser'/, 'croak unsafe sub-command';
+
+    $ns->acl_whoami;
+    is_deeply last_call(), ['acl_whoami'], 'safe sub-command method';
+
+    $ns->acl('WHOAMI');
+    is_deeply last_call(), ['acl', 'WHOAMI'], 'safe sub-command';
 };
 
 done_testing;

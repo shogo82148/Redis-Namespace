@@ -23,16 +23,30 @@ our $TARGET = "$FindBin::Bin/../lib/Redis/Namespace.pm";
 
 # These commands may break other namespaces and/or change the state of redis-server.
 # They are disabled in strict mode.
-our %UNSAFE_COMMANDS = map { $_ => 1 } qw(
-    cluster
-    config
-    flushall
-    flushdb
-    readonly
-    readwrite
-    replicaof
-    slaveof
-    shutdown
+# A command name disables all of its sub-commands,
+# and a "command sub-command" name disables only the sub-command.
+our %UNSAFE_COMMANDS = map { $_ => 1 } (
+    qw(
+        cluster
+        config
+        failover
+        flushall
+        flushdb
+        readonly
+        readwrite
+        replconf
+        replicaof
+        slaveof
+        shutdown
+        trimslots
+    ),
+    'acl deluser',
+    'acl load',
+    'acl save',
+    'acl setuser',
+    'function delete',
+    'function flush',
+    'function restore',
 );
 
 # These commands are implemented in Redis::Namespace by hand.
@@ -85,6 +99,30 @@ while (@args) {
 CODE
 
 our %OVERRIDES = (
+    # MIGRATE host port key|"" destination-db timeout
+    #   [COPY] [REPLACE] [AUTH password] [AUTH2 username password] [KEYS key [key ...]]
+    # key_specs searches "KEYS" backward from the end,
+    # but it can match with passwords or key names.
+    migrate => {
+        before => <<'CODE',
+if (@args > 2) {
+    # add_namespace keeps the empty string for the KEYS option as is.
+    ($args[2]) = $self->add_namespace($args[2]);
+}
+for (my $i = 5; $i < @args; $i++) {
+    my $option = lc($args[$i] // '');
+    if ($option eq 'auth') {
+        $i += 1;
+    } elsif ($option eq 'auth2') {
+        $i += 2;
+    } elsif ($option eq 'keys') {
+        @args[$i + 1 .. $#args] = $self->add_namespace(@args[$i + 1 .. $#args]);
+        last;
+    }
+}
+CODE
+    },
+
     # the commands that take patterns
     keys => {
         before => <<'CODE',
@@ -189,6 +227,9 @@ sub main {
         # so the commands that contains underscores can't be called either. e.g. BITFIELD_RO
         next unless $cmd =~ /\A[a-z0-9]+\z/;
 
+        # the names are embedded into the generated code.
+        die "unexpected sub-command name: $name\n" if defined $sub && $sub !~ /\A[a-z0-9_-]+\z/;
+
         my $def = build_definition($name, $commands->{$name}, defined $sub ? 1 : 0)
             or next;
         if (defined $sub) {
@@ -212,10 +253,10 @@ sub main {
             $code .= render_container($cmd, $def->{subcommands});
             for my $sub (sort keys %{$def->{subcommands}}) {
                 next unless $sub =~ /\A[a-z0-9]+\z/;
-                $code .= render_command("${cmd}_$sub", $cmd, $def->{subcommands}{$sub});
+                $code .= render_command("${cmd}_$sub", $def->{subcommands}{$sub}, $cmd, $sub);
             }
         } else {
-            $code .= render_command($cmd, $cmd, $def->{command});
+            $code .= render_command($cmd, $def->{command}, $cmd);
         }
     }
     $code .= render_footer();
@@ -265,8 +306,8 @@ sub key_specs_code {
 
     # simple case: the command takes only one key.
     if (@specs == 1 && $specs[0]{begin_search}{type} eq 'index'
-        && $specs[0]{find_keys}{type} eq 'range' && $specs[0]{find_keys}{spec}{lastkey} == 0) {
-        my $i = $specs[0]{begin_search}{spec}{index} - 1 - $offset;
+        && $specs[0]{find_keys}{type} eq 'range' && int_field($name, $specs[0]{find_keys}{spec}{lastkey}) == 0) {
+        my $i = index_field($name, $specs[0]{begin_search}{spec}{index}, $offset);
         return <<"CODE";
 if (\@args > $i) {
     (\$args[$i]) = \$self->add_namespace(\$args[$i]);
@@ -316,10 +357,11 @@ sub key_spec_code {
     my $first;
     my $close = '';
     if ($begin->{type} eq 'index') {
-        $first = $begin->{spec}{index} - 1 - $offset;
+        $first = index_field($name, $begin->{spec}{index}, $offset);
     } elsif ($begin->{type} eq 'keyword') {
-        my $keyword = lc $begin->{spec}{keyword};
-        my $startfrom = $begin->{spec}{startfrom};
+        my $keyword = lc($begin->{spec}{keyword} // '');
+        die "unexpected keyword in $name: $keyword\n" unless $keyword =~ /\A[a-z0-9_-]+\z/;
+        my $startfrom = int_field($name, $begin->{spec}{startfrom});
         my $loop;
         if ($startfrom >= 0) {
             my $start = $startfrom - 1 - $offset;
@@ -346,9 +388,9 @@ CODE
 
     my $body;
     if ($find->{type} eq 'range') {
-        my $lastkey = $find->{spec}{lastkey};
-        my $keystep = $find->{spec}{keystep};
-        my $limit = $find->{spec}{limit};
+        my $lastkey = int_field($name, $find->{spec}{lastkey});
+        my $keystep = step_field($name, $find->{spec}{keystep});
+        my $limit = int_field($name, $find->{spec}{limit});
         my $last;
         if ($lastkey >= 0) {
             $last = add($first, $lastkey);
@@ -369,9 +411,9 @@ CODE
                 . indent($emit->('$i')) . "}\n";
         }
     } elsif ($find->{type} eq 'keynum') {
-        my $keynumidx = add($first, $find->{spec}{keynumidx});
-        my $firstkey = add($first, $find->{spec}{firstkey});
-        my $keystep = $find->{spec}{keystep};
+        my $keynumidx = add($first, int_field($name, $find->{spec}{keynumidx}));
+        my $firstkey = add($first, int_field($name, $find->{spec}{firstkey}));
+        my $keystep = step_field($name, $find->{spec}{keystep});
         my $step = $keystep == 1 ? '$i++' : "\$i += $keystep";
         my $numkeys = $keystep == 1 ? '$numkeys' : "\$numkeys * $keystep";
         $body = <<"CODE" . indent(indent($emit->('$i'))) . "    }\n}\n";
@@ -409,12 +451,21 @@ sub render_footer {
 CODE
 }
 
+# render_unsafe_check renders the code that rejects unsafe commands in strict mode.
+sub render_unsafe_check {
+    my @names = @_;
+    for my $name (@names) {
+        return "croak \"unsafe command '$name'\" if \$self->{strict};\n" if $UNSAFE_COMMANDS{$name};
+    }
+    return '';
+}
+
 sub render_command {
-    my ($method, $cmd, $def) = @_;
+    my ($method, $def, $cmd, $sub) = @_;
     my $code = "\n# $def->{name}\n";
     $code .= "sub $method {\n";
     $code .= "    my (\$self, \@args) = \@_;\n";
-    $code .= "    croak \"unsafe command '$cmd'\" if \$self->{strict};\n" if $UNSAFE_COMMANDS{$cmd};
+    $code .= indent(render_unsafe_check($cmd, defined $sub ? "$cmd $sub" : ()));
     $code .= indent(render_body($def, "\$self->{redis}->$method("));
     $code .= "}\n";
     return $code;
@@ -426,7 +477,7 @@ sub render_container {
     my $code = "\n# $upper\n";
     $code .= "sub $cmd {\n";
     $code .= "    my (\$self, \@args) = \@_;\n";
-    $code .= "    croak \"unsafe command '$cmd'\" if \$self->{strict};\n" if $UNSAFE_COMMANDS{$cmd};
+    $code .= indent(render_unsafe_check($cmd));
     $code .= "    return \$self->{redis}->$cmd(\@args) if !\@args || ref \$args[0];\n";
     $code .= "\n";
     $code .= "    my \$subcommand = lc \$args[0];\n";
@@ -443,6 +494,7 @@ sub render_container {
             $body = "my \$name = shift \@args;\n"
                 . render_body($def, "\$self->{redis}->$cmd(\$name, ");
         }
+        $body = render_unsafe_check("$cmd $sub") . $body;
         push @order, $body unless $groups{$body};
         push @{$groups{$body}}, $sub;
     }
@@ -510,6 +562,31 @@ sub render_body {
     $code .= "my \$result = $call\@args);\n";
     $code .= "return ref \$result eq 'ARRAY' ? [ \$after->(\@\$result) ] : \$result;\n";
     return $code;
+}
+
+# The values of key_specs are embedded into the generated code.
+# Validate them to avoid generating broken or malicious code.
+sub int_field {
+    my ($name, $value) = @_;
+    die "unexpected integer in $name: " . ($value // 'undef') . "\n"
+        unless defined $value && $value =~ /\A-?[0-9]+\z/;
+    return $value;
+}
+
+# the index of @args from the index in key_specs
+sub index_field {
+    my ($name, $value, $offset) = @_;
+    my $index = int_field($name, $value) - 1 - $offset;
+    die "unexpected index in $name: $value\n" if $index < 0;
+    return $index;
+}
+
+# the step of loops. it must be positive to avoid infinite loops.
+sub step_field {
+    my ($name, $value) = @_;
+    my $step = int_field($name, $value);
+    die "unexpected step in $name: $value\n" if $step < 1;
+    return $step;
 }
 
 sub flatten_arguments {

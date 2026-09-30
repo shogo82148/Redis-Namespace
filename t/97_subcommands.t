@@ -23,7 +23,11 @@ subtest 'COMMAND COUNT' => sub {
 
 subtest 'DEBUG OBJECT' => sub {
     $redis->set("ns:key", "test");
-    eval { $redis->debug_object("ns:key") } or plan skip_all => "DEBUG command is not allowed: $@";
+    unless (eval { $redis->debug_object("ns:key") }) {
+        my $error = $@ || 'DEBUG OBJECT returned a false value';
+        die $error unless $error =~ /unknown command|DEBUG command not allowed/i;
+        plan skip_all => "DEBUG command is not allowed: $error";
+    }
     ok $redis->debug_object("ns:key");
     ok $ns->debug_object("key");
     ok $ns->debug(object => "key");

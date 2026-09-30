@@ -8,7 +8,8 @@ use Redis::Namespace;
 
 eval { Test::RedisServer->new } or plan skip_all => 'redis-server is required in PATH to run this test';
 
-my $redis_server = Test::RedisServer->new;
+# DEBUG is disabled by default since Redis 7.0. Older versions don't know the option and fail to start with it.
+my $redis_server = eval { Test::RedisServer->new(conf => { 'enable-debug-command' => 'local' }) } || Test::RedisServer->new;
 my $redis = Redis->new( $redis_server->connect_info );
 eval { $redis->command_count } or plan skip_all => 'redis-server does not support the COMMAND command';
 
@@ -22,6 +23,7 @@ subtest 'COMMAND COUNT' => sub {
 
 subtest 'DEBUG OBJECT' => sub {
     $redis->set("ns:key", "test");
+    eval { $redis->debug_object("ns:key") } or plan skip_all => "DEBUG command is not allowed: $@";
     ok $redis->debug_object("ns:key");
     ok $ns->debug_object("key");
     ok $ns->debug(object => "key");

@@ -12,8 +12,6 @@ on 'test' => sub {
 };
 
 on 'develop' => sub {
-   requires 'JSON';
-   requires 'Furl';
    requires 'Test::Kwalitee';
    requires 'Test::Kwalitee::Extra';
 };

@@ -72,7 +72,7 @@
          "web" : "https://github.com/shogo82148/Redis-Namespace"
       }
    },
-   "version" : "0.13",
+   "version" : "0.14",
    "x_contributors" : [
       "Dan Book <grinnz@gmail.com>",
       "Konstantin S. Uvarin <khedin@gmail.com>",

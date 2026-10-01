@@ -5923,8 +5923,9 @@ prefix of keys.
 =item guess
 
 If C<Redis::Namespace> doesn't known the command,
-call L<command info|http://redis.io/commands/command-info> and guess positions of keys.
+call L<command info|https://redis.io/docs/latest/commands/command-info/> and guess positions of keys.
 It is boolean value.
+The default value is false.
 
 =item strict
 
@@ -5932,6 +5933,7 @@ It is boolean value.
 If it is true, C<Redis::Namespace> doesn't execute unsafe commands
 which may break another namepace and/or change the state of redis-server, such as C<FLUSHALL> and C<SHUTDOWN>.
 Also, unknown commands are not executed, because there is no guarantee that the command does not break another namepace.
+The default value is false.
 
 =back
 

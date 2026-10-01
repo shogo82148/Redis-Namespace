@@ -23,11 +23,8 @@ jobs:
       - name: Install
         run: cpanm --quiet --installdeps --notest .
 
-      - name: Download commands.json
-        run: curl -sSfL -o "$RUNNER_TEMP/commands.json" https://raw.githubusercontent.com/redis/docs/refs/heads/main/data/commands.json
-
       - name: Generate
-        run: perl author/generate_commands.pl "$RUNNER_TEMP/commands.json"
+        run: perl author/generate_commands.pl
 
       - name: Test
         run: prove -l t/00_compile.t t/12_filters.t
@@ -45,4 +42,7 @@ jobs:
           title: "Update the generated commands"
           body: |
             This pull request is created by the "Update commands" workflow.
-            It regenerates the methods of Redis commands from https://raw.githubusercontent.com/redis/docs/refs/heads/main/data/commands.json.
+            It regenerates the methods of Redis commands from the command references of Redis and Valkey.
+
+            - https://raw.githubusercontent.com/redis/docs/refs/heads/main/data/commands.json
+            - https://github.com/valkey-io/valkey/tree/(the latest release)/src/commands

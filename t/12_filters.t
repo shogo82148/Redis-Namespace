@@ -61,6 +61,17 @@ subtest 'generated commands' => sub {
 
     $ns->bitop('AND', 'dest', 'foo', 'bar');
     is_deeply last_call(), ['bitop', 'AND', 'ns:dest', 'ns:foo', 'ns:bar'], 'bitop';
+
+    # Valkey only
+    $ns->delifeq('foo', 'value');
+    is_deeply last_call(), ['delifeq', 'ns:foo', 'value'], 'delifeq';
+
+    # shard channels
+    $ns->spublish('foo', 'message');
+    is_deeply last_call(), ['spublish', 'ns:foo', 'message'], 'spublish';
+
+    $ns->ssubscribe('foo', 'bar');
+    is_deeply last_call(), ['ssubscribe', 'ns:foo', 'ns:bar'], 'ssubscribe';
 };
 
 subtest 'keyword' => sub {
@@ -150,6 +161,9 @@ subtest 'strict mode' => sub {
 
     eval { $ns->flushall };
     like $@, qr/unsafe command 'flushall'/, 'croak unsafe command';
+
+    eval { $ns->cluster_migrateslots };
+    like $@, qr/unsafe command 'cluster'/, 'croak unsafe sub-command of Valkey';
 
     eval { $ns->acl_setuser('user') };
     like $@, qr/unsafe command 'acl setuser'/, 'croak unsafe sub-command method';

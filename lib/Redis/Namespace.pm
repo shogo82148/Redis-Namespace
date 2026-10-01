@@ -5923,7 +5923,7 @@ prefix of keys.
 =item guess
 
 If C<Redis::Namespace> doesn't known the command,
-call L<command info|http://redis.io/commands/command-info> and guess positions of keys.
+call L<command info|https://redis.io/docs/latest/commands/command-info/> and guess positions of keys.
 It is boolean value.
 The default value is false.
 

@@ -1,6 +1,7 @@
 Revision history for Perl extension Redis::Namespace
 
 {{$NEXT}}
+        - Document possible duplicate scan_callback invocations
 
 0.14 2026-10-01T10:40:39Z
         - generate the methods of Valkey commands from the command reference of Valkey

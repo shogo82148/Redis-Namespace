@@ -119,10 +119,7 @@ our %OVERRIDES = (
     # but it can match with passwords or key names.
     migrate => {
         before => <<'CODE',
-if (@args > 2) {
-    # add_namespace keeps the empty string for the KEYS option as is.
-    ($args[2]) = $self->add_namespace($args[2]);
-}
+my $has_keys;
 for (my $i = 5; $i < @args; $i++) {
     my $option = lc($args[$i] // '');
     if ($option eq 'auth') {
@@ -131,8 +128,13 @@ for (my $i = 5; $i < @args; $i++) {
         $i += 2;
     } elsif ($option eq 'keys') {
         @args[$i + 1 .. $#args] = $self->add_namespace(@args[$i + 1 .. $#args]);
+        $has_keys = 1;
         last;
     }
+}
+# keep the empty string for the KEYS option as is.
+if (@args > 2 && !($has_keys && defined $args[2] && $args[2] eq '')) {
+    ($args[2]) = $self->add_namespace($args[2]);
 }
 CODE
     },

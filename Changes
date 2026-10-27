@@ -1,6 +1,8 @@
 Revision history for Perl extension Redis::Namespace
 
 {{$NEXT}}
+        - Namespace falsy keys ('0', 0, '') and blessed objects.
+          They were sent to the global keyspace without the namespace prefix.
 
 0.15 2026-10-02T13:57:33Z
         - Document possible duplicate scan_callback invocations

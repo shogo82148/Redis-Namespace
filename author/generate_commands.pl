@@ -142,7 +142,7 @@ CODE
     # the commands that take patterns
     keys => {
         before => <<'CODE',
-if (defined $args[0]) {
+if (defined $args[0] && defined $self->{namespace_escaped}) {
     $args[0] = "$self->{namespace_escaped}:$args[0]";
 }
 CODE
@@ -165,7 +165,7 @@ while (@args) {
     my $option = lc shift @args;
     if ($option eq 'match') {
         my $pattern = shift @args;
-        push @res, $option, "$self->{namespace_escaped}:$pattern";
+        push @res, $option, defined $self->{namespace_escaped} ? "$self->{namespace_escaped}:$pattern" : $pattern;
         $has_pattern = 1;
     } elsif ($option eq 'count' || $option eq 'type') {
         push @res, $option, shift @args;
@@ -175,7 +175,7 @@ while (@args) {
 }
 
 # add pattern option
-unless ($has_pattern) {
+if (!$has_pattern && defined $self->{namespace_escaped}) {
     push @res, 'match', "$self->{namespace_escaped}:*";
 }
 @args = @res;

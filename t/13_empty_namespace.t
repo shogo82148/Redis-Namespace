@@ -6,6 +6,8 @@ use Test::RedisServer;
 
 use Redis::Namespace;
 
+eval { Test::RedisServer->new } or plan skip_all => 'redis-server is required in PATH to run this test';
+
 subtest 'add_namespace and rem_namespace' => sub {
     my $ns = Redis::Namespace->new(redis => bless({},'FakeRedis'), namespace => '0');
     is_deeply [$ns->add_namespace('foo')], ['0:foo'], 'namespace "0" is a namespace';
@@ -17,8 +19,6 @@ subtest 'add_namespace and rem_namespace' => sub {
         is_deeply [$ns->rem_namespace('foo')], ['foo'], 'no namespace is removed';
     }
 };
-
-eval { Test::RedisServer->new } or plan skip_all => 'redis-server is required in PATH to run this test';
 
 my $redis_server = Test::RedisServer->new;
 my $redis = Redis->new( $redis_server->connect_info );

@@ -2,7 +2,7 @@ package Redis::Namespace;
 
 use strict;
 use warnings;
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 use Redis;
 use Carp qw(carp croak);

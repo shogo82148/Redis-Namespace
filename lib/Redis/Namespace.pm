@@ -142,7 +142,10 @@ sub _guess {
     my $before = sub {
         my ($self, @args) = @_;
         if ($first > 0) {
-            for (my $i = $first; $i <= @args && ($last < 0 || $i <= $last); $i += $step) {
+            # a negative last key position counts from the end of the arguments.
+            # e.g. -1 is the last argument, -2 is the second last one (BLPOP key [key ...] timeout).
+            my $last_index = $last < 0 ? @args + 1 + $last : $last;
+            for (my $i = $first; $i <= @args && $i <= $last_index; $i += $step) {
                 ($args[$i-1]) = $self->add_namespace($args[$i-1]);
             }
         }

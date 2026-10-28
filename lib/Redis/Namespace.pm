@@ -6,6 +6,7 @@ our $VERSION = '0.15';
 
 use Redis;
 use Carp qw(carp croak);
+use Scalar::Util ();
 
 # the before filter that does nothing
 my $NOOP = sub {
@@ -21,7 +22,7 @@ sub add_namespace {
     my @result;
     for my $item(@args) {
         my $type = ref $item;
-        if($item && !$type) {
+        if(defined $item && !$type) {
             push @result, "$namespace:$item";
         } elsif($type eq 'SCALAR') {
             push @result, \"$namespace:$$item";
@@ -34,6 +35,9 @@ sub add_namespace {
                 $hash{$new_key} = $value;
             }
             push @result, \%hash;
+        } elsif(Scalar::Util::blessed($item)) {
+            # Redis.pm stringifies objects, so they are keys too.
+            push @result, "$namespace:$item";
         } else {
             push @result, $item;
         }
@@ -3404,10 +3408,7 @@ sub migrate {
     my ($self, @args) = @_;
     my $cb = @args && ref $args[-1] eq 'CODE' ? pop @args : undef;
 
-    if (@args > 2) {
-        # add_namespace keeps the empty string for the KEYS option as is.
-        ($args[2]) = $self->add_namespace($args[2]);
-    }
+    my $has_keys;
     for (my $i = 5; $i < @args; $i++) {
         my $option = lc($args[$i] // '');
         if ($option eq 'auth') {
@@ -3416,8 +3417,13 @@ sub migrate {
             $i += 2;
         } elsif ($option eq 'keys') {
             @args[$i + 1 .. $#args] = $self->add_namespace(@args[$i + 1 .. $#args]);
+            $has_keys = 1;
             last;
         }
+    }
+    # keep the empty string for the KEYS option as is.
+    if (@args > 2 && !($has_keys && defined $args[2] && $args[2] eq '')) {
+        ($args[2]) = $self->add_namespace($args[2]);
     }
 
     push @args, $cb if $cb;

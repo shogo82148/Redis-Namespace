@@ -13,10 +13,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Perl
-        uses: shogo82148/actions-setup-perl@a99edab616eaa8a66bbc16363c77a83361e5f2ce # v1.44.3
+        uses: shogo82148/actions-setup-perl@v1.44.3
         with:
           perl-version: "5"
 
@@ -31,10 +31,10 @@ jobs:
 
       - name: Generate token
         id: generate_token
-        uses: shogo82148/actions-github-app-token@bf955a861ff7c9d64c86b567bac12d7baae5614a # v1.3.4
+        uses: shogo82148/actions-github-app-token@v1.3.4
 
       - name: Commit and create a pull request
-        uses: shogo82148/actions-commit-and-create-pr@b1322fe9da4037e9720e34ea221997cffcd3498d # v1.1.4
+        uses: shogo82148/actions-commit-and-create-pr@v1.1.4
         with:
           github-token: ${{ steps.generate_token.outputs.token }}
           head-branch-prefix: "auto-update-commands/"

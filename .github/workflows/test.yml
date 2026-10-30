@@ -55,15 +55,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Perl ${{ matrix.perl }}
-        uses: shogo82148/actions-setup-perl@a99edab616eaa8a66bbc16363c77a83361e5f2ce # v1.44.3
+        uses: shogo82148/actions-setup-perl@v1.44.3
         with:
           perl-version: ${{ matrix.perl }}
 
       - name: Set up Redis ${{ matrix.redis }}
-        uses: shogo82148/actions-setup-redis@ffaf3c39499b2917543d84f6acc818277580b531 # v1.58.1
+        uses: shogo82148/actions-setup-redis@v1.58.1
         with:
           redis-version: ${{ matrix.redis }}
           auto-start: false
@@ -78,10 +78,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Perl 5
-        uses: shogo82148/actions-setup-perl@a99edab616eaa8a66bbc16363c77a83361e5f2ce # v1.44.3
+        uses: shogo82148/actions-setup-perl@v1.44.3
         with:
           perl-version: "5"
       - name: Install

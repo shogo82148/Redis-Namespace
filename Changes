@@ -1,6 +1,8 @@
 Revision history for Perl extension Redis::Namespace
 
 {{$NEXT}}
+
+0.17 2026-11-23T08:10:05Z
         - support commands of Valkey 9.2
 
 0.16 2026-10-28T13:52:39Z
